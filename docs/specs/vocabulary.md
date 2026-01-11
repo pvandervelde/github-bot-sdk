@@ -163,10 +163,11 @@ A specific interaction with GitHub's API, such as creating comments or updating 
 
 GitHub's mechanism for returning large result sets across multiple requests.
 
-- **Page-Based**: Results divided into pages with next/previous links
-- **Cursor-Based**: Some endpoints use cursor-based pagination
+- **Page-Based**: Results divided into pages with page numbers and per-page limits
+- **Link Headers**: GitHub returns Link header with next/previous page URLs
 - **Helper Methods**: SDK utilities for iterating through all pages
-- **Limits**: Per-page limits and total result set limits
+- **Limits**: Per-page limits (typically 30-100) and total result set limits
+- **Current Implementation**: Page-number based pagination (page, per_page parameters)
 
 ## Error Handling Concepts
 

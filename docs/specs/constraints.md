@@ -55,13 +55,14 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 ### Authentication Token Handling
 
 **Security Requirements**:
+
 - Token types MUST zero memory on drop (implement Drop trait)
-- Token types MUST NOT implement Clone (prevents accidental duplication)
-- Token types MUST NOT implement Debug (prevents logging)
+- Token types MAY implement Clone if wrapped in Arc for shared ownership
+- Token types MUST implement custom Debug that redacts token values
 - Token types MUST NOT implement Display (prevents string conversion)
 - Token storage must use secure string wrappers
 
-**Rationale**: Prevents token leakage through debugging, logging, or memory inspection.
+**Rationale**: Custom Debug implementation allows safe debugging while preventing accidental token exposure. Clone is permitted when needed for shared ownership patterns (e.g., concurrent access), but the implementation must maintain security guarantees.
 
 ### Secret Management
 
@@ -84,12 +85,14 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 ### Authentication Flow
 
 **JWT Requirements**:
+
 - Claims MUST include: issuer (App ID), issued-at time, expiration time
 - Expiration MUST be maximum 10 minutes from issue time (GitHub requirement)
 - Use RS256 algorithm (RSA SHA-256) for signing
 - Never exceed 10-minute maximum expiration
 
 **Installation Token Requirements**:
+
 - Requests MUST specify installation ID
 - MAY optionally specify permissions subset
 - MAY optionally specify repository subset
@@ -115,6 +118,7 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 ### Webhook Validation
 
 **Security Requirements**:
+
 - Signature validation MUST use constant-time comparison (prevents timing attacks)
 - Webhook secret MUST be stored as secure string (zeroed on drop)
 - Use HMAC-SHA256 for signature computation
@@ -122,6 +126,7 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 - Return generic validation error (don't leak signature details)
 
 **Algorithm**:
+
 1. Compute HMAC-SHA256 of payload using webhook secret
 2. Compare computed signature with provided signature using constant-time equality
 3. Return success/failure without exposing computed signature
@@ -153,6 +158,7 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 ### Caching Strategy
 
 **Cache Requirements**:
+
 - JWT tokens cached until near expiry (recommend 1-minute buffer)
 - Installation tokens cached with 5-minute buffer before expiry
 - Cache keyed by App ID for JWTs, Installation ID for installation tokens
@@ -161,6 +167,7 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 - Cache hit/miss metrics for monitoring
 
 **Cache Invalidation**:
+
 - Tokens evicted automatically before expiration (proactive refresh)
 - Manual invalidation on authentication errors
 - Clear all tokens on shutdown
@@ -170,6 +177,7 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 ### Retry Policies
 
 **Retry Configuration**:
+
 - Maximum retry attempts: 3 (default, should be configurable)
 - Initial retry delay: 1 second (default)
 - Maximum retry delay: 60 seconds (default)
@@ -177,6 +185,7 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 - Jitter: Enabled (prevents thundering herd)
 
 **Retry Rules**:
+
 - Only retry transient errors (5xx, network failures, timeouts)
 - Never retry authentication failures (401)
 - Never retry authorization failures (403, non-rate-limit)
@@ -193,12 +202,14 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 ### Error Classification
 
 **Retryable Errors** (transient failures):
+
 - Rate limiting (429) - retry after rate limit reset
 - Server errors (500, 502, 503, 504) - retry with exponential backoff
 - Network failures (connection timeouts, DNS failures) - retry with backoff
 - Request timeouts - retry with backoff
 
 **Non-Retryable Errors** (permanent failures):
+
 - Authentication failures (401) - fix credentials, don't retry
 - Authorization failures (403, non-rate-limit) - fix permissions
 - Not found (404) - resource doesn't exist
@@ -206,6 +217,7 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 - Client errors (4xx generally) - fix request, don't retry
 
 **Error Context Requirements**:
+
 - Include operation context for debugging
 - Include correlation/trace ID
 - Never include sensitive data (tokens, keys)
@@ -249,6 +261,7 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 ### Metrics
 
 **Required Metrics** (using `metrics` crate or compatible):
+
 - Counter: `github_api_requests_total` (labels: method, status)
 - Histogram: `github_api_request_duration` (in milliseconds)
 - Gauge: `github_rate_limit_remaining` (current quota)
@@ -268,12 +281,14 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 ### Environment Configuration
 
 **Required Configuration**:
+
 - GitHub App ID (numeric identifier)
 - Private key (PEM format, from file or secret management)
-- API base URL (default: https://api.github.com)
+- API base URL (default: <https://api.github.com>)
 - User agent string (required by GitHub API)
 
 **Optional Configuration**:
+
 - Webhook secret (for signature validation)
 - Request timeout (default: 30 seconds)
 - Maximum retries (default: 3)

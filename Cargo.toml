@@ -1,0 +1,59 @@
+[package]
+name = "github-bot-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "GitHub Bot SDK for Queue-Keeper"
+license = "Apache-2.0"
+repository = "https://github.com/pvandervelde/github-bot-sdk"
+
+
+# Crate metadata
+keywords = ["github", "webhook", "api"]
+categories = ["api-bindings", "web-programming"]
+readme = "README.md"
+[dependencies]
+# Core dependencies
+tokio = { version = "1.0" }
+tracing = { version = "1.0" }
+serde = { version = "1.0" }
+serde_json = { version = "1.0" }
+uuid = { version = "1.0" }
+
+# HTTP client
+reqwest = { version = "1.0" }
+
+# JWT and crypto
+jsonwebtoken = { version = "1.0" }
+hmac = { version = "1.0" }
+sha2 = { version = "1.0" }
+rsa = "0.9"
+subtle = "2.6"
+hex = { version = "1.0" }
+
+# Date/time
+chrono = { version = "1.0" }
+
+# Random number generation for jitter
+rand = { version = "1.0" }
+
+# Error handling
+thiserror = { version = "1.0" }
+anyhow = { version = "1.0" }
+
+# Async traits
+async-trait = { version = "1.0" }
+
+# Bytes
+bytes = { version = "1.0" }
+
+# Base64 encoding
+base64 = "0.22"
+
+# URL handling
+url = { version = "1.0" }
+
+[dev-dependencies]
+tempfile = "=3.23.0"
+tokio-test = "=0.4.4"
+wiremock = "=0.6.5"
+

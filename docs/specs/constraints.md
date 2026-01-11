@@ -54,21 +54,14 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 
 ### Authentication Token Handling
 
-```rust
-// Tokens must be handled securely
-pub struct SecureString(String);
+**Security Requirements**:
+- Token types MUST zero memory on drop (implement Drop trait)
+- Token types MUST NOT implement Clone (prevents accidental duplication)
+- Token types MUST NOT implement Debug (prevents logging)
+- Token types MUST NOT implement Display (prevents string conversion)
+- Token storage must use secure string wrappers
 
-impl Drop for SecureString {
-    fn drop(&mut self) {
-        // Zero memory on drop
-        self.0.as_mut_vec().fill(0);
-    }
-}
-
-// No Debug, Display, or Clone for tokens
-#[derive(Clone)] // FORBIDDEN for token types
-pub struct JwtToken(SecureString);
-```
+**Rationale**: Prevents token leakage through debugging, logging, or memory inspection.
 
 ### Secret Management
 
@@ -90,21 +83,17 @@ pub struct JwtToken(SecureString);
 
 ### Authentication Flow
 
-```rust
-// JWT generation must follow GitHub spec exactly
-pub struct JwtClaims {
-    pub iss: AppId,           // GitHub App ID
-    pub iat: i64,             // Issued at (current time)
-    pub exp: i64,             // Expires (max 10 minutes from iat)
-}
+**JWT Requirements**:
+- Claims MUST include: issuer (App ID), issued-at time, expiration time
+- Expiration MUST be maximum 10 minutes from issue time (GitHub requirement)
+- Use RS256 algorithm (RSA SHA-256) for signing
+- Never exceed 10-minute maximum expiration
 
-// Installation tokens have different constraints
-pub struct InstallationTokenRequest {
-    pub installation_id: InstallationId,
-    pub permissions: HashMap<String, String>, // Optional permissions
-    pub repositories: Option<Vec<RepositoryId>>, // Optional repo filter
-}
-```
+**Installation Token Requirements**:
+- Requests MUST specify installation ID
+- MAY optionally specify permissions subset
+- MAY optionally specify repository subset
+- Responses contain token string and expiration time
 
 ### Rate Limiting
 
@@ -125,20 +114,17 @@ pub struct InstallationTokenRequest {
 
 ### Webhook Validation
 
-```rust
-pub struct WebhookValidator {
-    secret: SecureString,
-}
+**Security Requirements**:
+- Signature validation MUST use constant-time comparison (prevents timing attacks)
+- Webhook secret MUST be stored as secure string (zeroed on drop)
+- Use HMAC-SHA256 for signature computation
+- Validate signature BEFORE any payload processing
+- Return generic validation error (don't leak signature details)
 
-impl WebhookValidator {
-    // Signature validation must be constant-time
-    pub fn validate_signature(&self, payload: &[u8], signature: &str) -> Result<bool, ValidationError> {
-        let expected = self.compute_signature(payload);
-        // MUST use constant-time comparison
-        Ok(constant_time_eq(expected.as_bytes(), signature.as_bytes()))
-    }
-}
-```
+**Algorithm**:
+1. Compute HMAC-SHA256 of payload using webhook secret
+2. Compare computed signature with provided signature using constant-time equality
+3. Return success/failure without exposing computed signature
 
 ### Event Processing
 
@@ -166,28 +152,36 @@ impl WebhookValidator {
 
 ### Caching Strategy
 
-```rust
-pub struct TokenCache {
-    // JWT tokens cached until near expiry
-    jwt_cache: Arc<RwLock<HashMap<AppId, (JwtToken, Instant)>>>,
-    // Installation tokens cached with 5-minute buffer before expiry
-    installation_cache: Arc<RwLock<HashMap<InstallationId, (InstallationToken, Instant)>>>,
-}
-```
+**Cache Requirements**:
+- JWT tokens cached until near expiry (recommend 1-minute buffer)
+- Installation tokens cached with 5-minute buffer before expiry
+- Cache keyed by App ID for JWTs, Installation ID for installation tokens
+- Thread-safe access (use appropriate synchronization primitives)
+- Automatic eviction of expired entries
+- Cache hit/miss metrics for monitoring
+
+**Cache Invalidation**:
+- Tokens evicted automatically before expiration (proactive refresh)
+- Manual invalidation on authentication errors
+- Clear all tokens on shutdown
 
 ## Error Recovery Constraints
 
 ### Retry Policies
 
-```rust
-pub struct GitHubRetryPolicy {
-    pub max_attempts: u32,           // Default: 3
-    pub initial_delay: Duration,     // Default: 1s
-    pub max_delay: Duration,         // Default: 60s
-    pub backoff_multiplier: f64,     // Default: 2.0
-    pub jitter: bool,                // Default: true
-}
-```
+**Retry Configuration**:
+- Maximum retry attempts: 3 (default, should be configurable)
+- Initial retry delay: 1 second (default)
+- Maximum retry delay: 60 seconds (default)
+- Backoff multiplier: 2.0 (exponential backoff)
+- Jitter: Enabled (prevents thundering herd)
+
+**Retry Rules**:
+- Only retry transient errors (5xx, network failures, timeouts)
+- Never retry authentication failures (401)
+- Never retry authorization failures (403, non-rate-limit)
+- Never retry validation errors (422)
+- Respect Retry-After header when present
 
 ### Circuit Breaker
 
@@ -198,20 +192,24 @@ pub struct GitHubRetryPolicy {
 
 ### Error Classification
 
-```rust
-pub enum GitHubError {
-    // Retryable errors
-    RateLimited { reset_at: Instant },
-    ServerError { status: u16 },
-    NetworkError { source: reqwest::Error },
+**Retryable Errors** (transient failures):
+- Rate limiting (429) - retry after rate limit reset
+- Server errors (500, 502, 503, 504) - retry with exponential backoff
+- Network failures (connection timeouts, DNS failures) - retry with backoff
+- Request timeouts - retry with backoff
 
-    // Non-retryable errors
-    AuthenticationFailed,
-    PermissionDenied,
-    ResourceNotFound,
-    ValidationError { field: String, message: String },
-}
-```
+**Non-Retryable Errors** (permanent failures):
+- Authentication failures (401) - fix credentials, don't retry
+- Authorization failures (403, non-rate-limit) - fix permissions
+- Not found (404) - resource doesn't exist
+- Validation errors (422) - fix request data
+- Client errors (4xx generally) - fix request, don't retry
+
+**Error Context Requirements**:
+- Include operation context for debugging
+- Include correlation/trace ID
+- Never include sensitive data (tokens, keys)
+- Include recovery suggestions when applicable
 
 ## Testing Constraints
 
@@ -250,13 +248,13 @@ pub enum GitHubError {
 
 ### Metrics
 
-```rust
-// Required metrics via `metrics` crate
-metrics::counter!("github_api_requests_total", "method" => method, "status" => status);
-metrics::histogram!("github_api_request_duration", duration);
-metrics::gauge!("github_rate_limit_remaining", remaining);
-metrics::counter!("github_auth_token_refreshes_total", "type" => token_type);
-```
+**Required Metrics** (using `metrics` crate or compatible):
+- Counter: `github_api_requests_total` (labels: method, status)
+- Histogram: `github_api_request_duration` (in milliseconds)
+- Gauge: `github_rate_limit_remaining` (current quota)
+- Counter: `github_auth_token_refreshes_total` (labels: token_type)
+- Counter: `github_webhook_signatures_validated` (labels: result)
+- Counter: `github_errors_total` (labels: error_type, operation)
 
 ### Tracing
 
@@ -269,15 +267,18 @@ metrics::counter!("github_auth_token_refreshes_total", "type" => token_type);
 
 ### Environment Configuration
 
-```rust
-pub struct GitHubConfig {
-    pub app_id: AppId,
-    pub private_key_path: PathBuf,          // Path to private key file
-    pub webhook_secret: Option<String>,     // For webhook validation
-    pub api_base_url: Url,                  // Default: https://api.github.com
-    pub user_agent: String,                 // Required by GitHub API
-}
-```
+**Required Configuration**:
+- GitHub App ID (numeric identifier)
+- Private key (PEM format, from file or secret management)
+- API base URL (default: https://api.github.com)
+- User agent string (required by GitHub API)
+
+**Optional Configuration**:
+- Webhook secret (for signature validation)
+- Request timeout (default: 30 seconds)
+- Maximum retries (default: 3)
+- Rate limit margin (default: 0.1 = 10%)
+- Token cache TTL overrides
 
 ### Secret Configuration
 
@@ -291,14 +292,10 @@ pub struct GitHubConfig {
 ### Binary Size
 
 - Library MUST compile with minimal feature flags
-- Optional features for different authentication methods:
-
-  ```toml
-  [features]
-  default = ["app-auth"]
-  app-auth = ["jsonwebtoken", "rsa"]
-  webhook-validation = ["hmac", "sha2"]
-  ```
+- Optional features for different authentication methods
+- Feature flags should enable/disable major functionality groups
+- Default features should cover common use cases
+- Example feature categories: app-auth, webhook-validation, tracing
 
 ### Runtime Dependencies
 

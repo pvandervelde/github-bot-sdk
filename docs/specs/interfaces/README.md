@@ -40,19 +40,15 @@ The installation-level client provides authenticated access to GitHub API operat
 
 ### Cross-Domain Operations
 
-- **[milestone-operations.md](./milestone-operations.md)** - Milestone management
-  - Milestone CRUD operations
-  - Milestone association with issues/PRs
+- **[project-operations.md](./project-operations.md)** - GitHub Projects V2 management
+  - Project listing and retrieval
+  - Project item management
+  - Owner-scoped operations (user/organization)
 
-- **[workflow-operations.md](./workflow-operations.md)** - GitHub Actions workflows
-  - Workflow listing and retrieval
-  - Workflow run management
-  - Workflow status tracking
-
-- **[release-operations.md](./release-operations.md)** - Release management
-  - Release CRUD operations
-  - Release asset management
-  - Tag association
+- **[additional-operations.md](./additional-operations.md)** - Milestone, Workflow, and Release operations
+  - Milestone CRUD and associations
+  - GitHub Actions workflow triggers
+  - Release and asset management
 
 ### Infrastructure
 
@@ -75,9 +71,8 @@ installation-client (foundation)
 ├── repository-operations
 ├── issue-operations
 ├── pull-request-operations
-├── milestone-operations
-├── workflow-operations
-└── release-operations
+├── project-operations
+└── additional-operations (milestone, workflow, release)
     ↓
 pagination (enhances list operations)
     ↓

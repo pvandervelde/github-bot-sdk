@@ -76,7 +76,7 @@ impl SignatureValidator {
     /// # Arguments
     ///
     /// * `payload` - The raw webhook payload bytes
-    /// * `signature` - The signature from X-Hub-Signature-256 header (format: "sha256=<hex>")
+    /// * `signature` - The signature from X-Hub-Signature-256 header (format: "sha256=\<hex\>")
     ///
     /// # Returns
     ///

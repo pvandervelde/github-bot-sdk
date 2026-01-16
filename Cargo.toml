@@ -2,58 +2,58 @@
 name = "github-bot-sdk"
 version = "0.1.0"
 edition = "2021"
-description = "GitHub Bot SDK for Queue-Keeper"
+description = "A comprehensive Rust SDK for GitHub App integration with authentication, webhooks, and API client"
 license = "Apache-2.0"
 repository = "https://github.com/pvandervelde/github-bot-sdk"
-
+documentation = "https://docs.rs/github-bot-sdk"
+homepage = "https://github.com/pvandervelde/github-bot-sdk"
 
 # Crate metadata
-keywords = ["github", "webhook", "api"]
+keywords = ["github", "webhook", "api", "bot", "sdk"]
 categories = ["api-bindings", "web-programming"]
 readme = "README.md"
 [dependencies]
 # Core dependencies
-tokio = { version = "1.0" }
-tracing = { version = "1.0" }
-serde = { version = "1.0" }
-serde_json = { version = "1.0" }
-uuid = { version = "1.0" }
+tokio = { version = "1.49", features = ["full"] }
+tracing = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.19", features = ["v4", "serde"] }
 
 # HTTP client
-reqwest = { version = "1.0" }
+reqwest = { version = "0.13", features = ["json"] }
 
 # JWT and crypto
-jsonwebtoken = { version = "1.0" }
-hmac = { version = "1.0" }
-sha2 = { version = "1.0" }
+jsonwebtoken = "9.3"
+hmac = "0.12"
+sha2 = "0.10"
 rsa = "0.9"
 subtle = "2.6"
-hex = { version = "1.0" }
+hex = "0.4"
 
 # Date/time
-chrono = { version = "1.0" }
+chrono = { version = "0.4", features = ["serde"] }
 
 # Random number generation for jitter
-rand = { version = "1.0" }
+rand = "0.8"
 
 # Error handling
-thiserror = { version = "1.0" }
-anyhow = { version = "1.0" }
+thiserror = "1.0"
+anyhow = "1.0"
 
 # Async traits
-async-trait = { version = "1.0" }
+async-trait = "0.1"
 
 # Bytes
-bytes = { version = "1.0" }
+bytes = "1.11"
 
 # Base64 encoding
 base64 = "0.22"
 
 # URL handling
-url = { version = "1.0" }
+url = "2.5"
 
 [dev-dependencies]
-tempfile = "=3.23.0"
-tokio-test = "=0.4.4"
-wiremock = "=0.6.5"
-
+tempfile = "3.23"
+tokio-test = "0.4"
+wiremock = "0.6"

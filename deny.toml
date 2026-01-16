@@ -74,10 +74,14 @@ feature-depth = 1
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
-    #"RUSTSEC-0000-0000",
-    #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
-    #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
-    #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
+    # RUSTSEC-2023-0071: Marvin Attack on RSA
+    # The rsa crate has a timing sidechannel vulnerability in RSA decryption.
+    # We use rsa only for JWT signing (not decryption) in GitHub App authentication,
+    # which is not vulnerable to this attack vector. GitHub's infrastructure receives
+    # the signed JWT, but we never perform RSA decryption operations.
+    # Tracking: https://github.com/RustCrypto/RSA/issues/19
+    # When a patched version is available, this should be removed.
+    { id = "RUSTSEC-2023-0071", reason = "Not vulnerable: only using RSA for signing, not decryption" },
 ]
 
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
@@ -93,7 +97,16 @@ ignore = [
 # List of explicitly allowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
-allow = ["Apache-2.0", "Apache-2.0 WITH LLVM-exception", "MIT", "MPL-2.0"]
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "ISC",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "OpenSSL",
+    "CDLA-Permissive-2.0",
+]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the
 # canonical license text of a valid SPDX license file.
@@ -105,7 +118,7 @@ confidence-threshold = 0.93
 exceptions = [
     # Each entry is the crate and version constraint, and its specific allow
     # list
-    { allow = ["Unicode-DFS-2016"], crate = "unicode-ident" },
+    { allow = ["Unicode-3.0"], crate = "unicode-ident" },
 ]
 
 # Some crates don't have (easily) machine readable licensing information,
@@ -230,8 +243,8 @@ allow-git = []
 
 [sources.allow-org]
 # 1 or more github.com organizations to allow git sources for
-github = [""]
+#github = [""]
 # 1 or more gitlab.com organizations to allow git sources for
-gitlab = [""]
+#gitlab = [""]
 # 1 or more bitbucket.org organizations to allow git sources for
-bitbucket = [""]
+#bitbucket = [""]

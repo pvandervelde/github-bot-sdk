@@ -51,7 +51,8 @@ fn calculate_exponential_backoff(
     // Add jitter if requested (±25% randomization)
     if use_jitter {
         use rand::Rng;
-        let jitter_factor = rand::rng().random_range(0.75..=1.25);
+        let mut rng = rand::thread_rng();
+        let jitter_factor = rng.gen_range(0.75..=1.25);
         delay = std::time::Duration::from_millis((delay.as_millis() as f64 * jitter_factor) as u64);
     }
 

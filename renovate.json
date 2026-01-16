@@ -1,10 +1,29 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:best-practices"
+    "config:best-practices",
+    ":dependencyDashboard"
+  ],
+  "semanticCommits": "enabled",
+  "separateMinorPatch": true,
+  "timezone": "UTC",
+  "labels": [
+    "dependencies"
   ],
   "packageRules": [
     {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions",
+      "semanticCommitType": "ci",
+      "schedule": [
+        "on the first day of the month"
+      ]
+    },
+    {
+      "description": "Group taiki-e/install-action updates separately",
       "matchPackageNames": [
         "taiki-e/install-action"
       ],
@@ -12,6 +31,66 @@
       "schedule": [
         "on the first day of the month"
       ]
+    },
+    {
+      "description": "Group Rust core ecosystem dependencies",
+      "matchPackageNames": [
+        "tokio",
+        "tokio-test",
+        "tokio-util",
+        "tokio-stream"
+      ],
+      "groupName": "tokio ecosystem",
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps"
+    },
+    {
+      "description": "Group serde ecosystem dependencies",
+      "matchPackageNames": [
+        "serde",
+        "serde_json",
+        "serde_derive"
+      ],
+      "groupName": "serde ecosystem",
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps"
+    },
+    {
+      "description": "Group crypto dependencies",
+      "matchPackageNames": [
+        "hmac",
+        "sha2",
+        "rsa",
+        "jsonwebtoken",
+        "subtle"
+      ],
+      "groupName": "crypto dependencies",
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps"
+    },
+    {
+      "description": "Group HTTP/networking dependencies",
+      "matchPackageNames": [
+        "reqwest",
+        "hyper",
+        "url"
+      ],
+      "groupName": "HTTP dependencies",
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps"
     }
-  ]
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 4am on Monday"
+    ]
+  },
+  "vulnerabilityAlerts": {
+    "labels": [
+      "security"
+    ],
+    "semanticCommitType": "fix",
+    "semanticCommitScope": "security"
+  }
 }

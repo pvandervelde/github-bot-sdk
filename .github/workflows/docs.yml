@@ -16,18 +16,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@82a92a6e8fbeee089604da2575dc567ae9ddeaab # v2
 
       - name: Build documentation
-        uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1
-        with:
-          command: doc
-          args: --verbose --no-deps --all-features
+        run: cargo doc --verbose --no-deps --all-features
 
       - name: Finalize documentation
         run: |

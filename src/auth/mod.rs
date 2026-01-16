@@ -563,19 +563,14 @@ impl Default for InstallationPermissions {
 ///
 /// Represents the access level granted for a specific permission.
 /// Defaults to `None` when not specified.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PermissionLevel {
+    #[default]
     None,
     Read,
     Write,
     Admin,
-}
-
-impl Default for PermissionLevel {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 /// Specific permissions that can be checked on tokens.

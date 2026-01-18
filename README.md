@@ -653,6 +653,115 @@ To use this SDK, you need a GitHub App with appropriate permissions:
 - Use HTTPS for all webhook endpoints
 - Monitor failed authentication attempts
 
+## Testing
+
+### Running Tests
+
+Run the complete test suite:
+
+```bash
+# Run all tests
+cargo test
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run specific test module
+cargo test auth::
+
+# Run doc tests
+cargo test --doc
+```
+
+### Test Coverage
+
+Generate and view test coverage:
+
+```bash
+# Install cargo-llvm-cov
+cargo install cargo-llvm-cov
+
+# Generate coverage report
+cargo llvm-cov --all-features --workspace --html
+
+# Open coverage report
+open target/llvm-cov/html/index.html  # macOS/Linux
+start target/llvm-cov/html/index.html # Windows
+```
+
+### Mocking GitHub API with WireMock
+
+The SDK uses `wiremock` for testing GitHub API interactions:
+
+```rust
+use wiremock::{MockServer, Mock, ResponseTemplate};
+use wiremock::matchers::{method, path, header};
+
+#[tokio::test]
+async fn test_get_repository() {
+    // Start mock server
+    let mock_server = MockServer::start().await;
+
+    // Setup mock response
+    Mock::given(method("GET"))
+        .and(path("/repos/owner/repo"))
+        .and(header("Authorization", "token ghs_..."))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": 123,
+            "name": "repo",
+            "full_name": "owner/repo",
+        })))
+        .mount(&mock_server)
+        .await;
+
+    // Test with mock server
+    let client = create_test_client(&mock_server.uri());
+    let repo = client.get_repository("owner", "repo").await.unwrap();
+    assert_eq!(repo.name, "repo");
+}
+```
+
+### Integration Testing
+
+For integration tests with real GitHub API:
+
+```rust
+// tests/integration_test.rs
+use github_bot_sdk::client::GitHubClient;
+
+#[tokio::test]
+#[ignore]  // Run with: cargo test -- --ignored
+async fn test_real_api() {
+    let client = create_authenticated_client_from_env();
+    let app = client.get_app().await.unwrap();
+    assert!(!app.name.is_empty());
+}
+```
+
+### Test Organization
+
+Tests are colocated with source files using the `_tests.rs` pattern:
+
+```
+src/
+├── auth/
+│   ├── mod.rs          # Implementation
+│   ├── mod_tests.rs    # Tests for mod.rs
+│   ├── tokens.rs       # Implementation
+│   └── tokens_tests.rs # Tests for tokens.rs
+```
+
+### Continuous Integration
+
+Tests run automatically on every push via GitHub Actions:
+
+- Unit tests with full coverage
+- Doc tests
+- Lint checks (rustfmt, clippy)
+- Dependency security audits
+
+See `.github/workflows/ci.yml` for the complete CI configuration.
+
 ## Documentation
 
 - [API Documentation](https://docs.rs/github-bot-sdk)

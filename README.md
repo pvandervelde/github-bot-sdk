@@ -571,6 +571,88 @@ loop {
 }
 ```
 
+## Configuration
+
+### Environment Variables
+
+The SDK can be configured using environment variables for common settings:
+
+```bash
+# GitHub App Configuration
+GITHUB_APP_ID=123456
+GITHUB_PRIVATE_KEY_PATH=/path/to/private-key.pem
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+
+# API Configuration
+GITHUB_API_URL=https://api.github.com  # Default, override for GitHub Enterprise
+GITHUB_USER_AGENT=my-bot/1.0
+
+# Timeouts and Retries
+GITHUB_REQUEST_TIMEOUT_SECS=30
+GITHUB_MAX_RETRIES=3
+```
+
+### Client Configuration Options
+
+Customize client behavior through `ClientConfig`:
+
+```rust
+use github_bot_sdk::client::ClientConfig;
+use std::time::Duration;
+
+let config = ClientConfig::builder()
+    .user_agent("my-bot/1.0")                    // Required by GitHub API
+    .timeout(Duration::from_secs(60))            // Request timeout
+    .max_retries(5)                              // Maximum retry attempts
+    .initial_retry_delay(Duration::from_millis(100))  // Base delay for retries
+    .max_retry_delay(Duration::from_secs(60))    // Maximum backoff delay
+    .rate_limit_margin(0.1)                      // Keep 10% rate limit buffer
+    .github_api_url("https://api.github.com")   // API base URL
+    .build();
+```
+
+### GitHub App Setup Requirements
+
+To use this SDK, you need a GitHub App with appropriate permissions:
+
+1. **Create a GitHub App**:
+   - Go to Settings → Developer settings → GitHub Apps
+   - Click "New GitHub App"
+   - Configure webhook URL and permissions
+
+2. **Required Permissions**:
+   - Repository permissions (based on your use case):
+     - Contents: Read & Write (for file operations)
+     - Issues: Read & Write (for issue operations)
+     - Pull requests: Read & Write (for PR operations)
+     - Workflows: Read & Write (for workflow operations)
+   - Organization permissions (if needed):
+     - Members: Read (for team operations)
+
+3. **Generate Private Key**:
+   - In your app settings, scroll to "Private keys"
+   - Click "Generate a private key"
+   - Download and securely store the `.pem` file
+
+4. **Install the App**:
+   - Install the app on your organization or repositories
+   - Note the installation ID from the installation URL
+
+5. **Webhook Configuration** (if using webhooks):
+   - Set webhook URL to your server endpoint
+   - Generate and securely store webhook secret
+   - Select event subscriptions you need
+
+### Security Best Practices
+
+- **Never commit private keys or secrets to version control**
+- Store secrets in environment variables or secret management systems (Azure Key Vault, AWS Secrets Manager)
+- Use separate keys for development and production
+- Rotate webhook secrets periodically
+- Implement proper webhook signature validation
+- Use HTTPS for all webhook endpoints
+- Monitor failed authentication attempts
+
 ## Documentation
 
 - [API Documentation](https://docs.rs/github-bot-sdk)

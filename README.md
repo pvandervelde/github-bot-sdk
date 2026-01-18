@@ -769,7 +769,45 @@ See `.github/workflows/ci.yml` for the complete CI configuration.
 
 ## Examples
 
-See the [examples/](examples/) directory for complete working examples.
+The SDK provides comprehensive examples demonstrating common use cases:
+
+### Available Examples
+
+Examples will be added in the `examples/` directory. Planned examples include:
+
+- **Basic Bot** - Simple webhook listener with event processing
+- **Issue Labeler** - Automatically label issues based on content
+- **PR Review Bot** - Automated PR review comments and checks
+- **Release Manager** - Automated release creation and notes
+- **Repository Manager** - Bulk repository configuration and maintenance
+- **Webhook Server** - Complete webhook receiver with signature validation
+- **Multi-Installation Bot** - Handle events across multiple installations
+
+### Running Examples
+
+Once examples are added, run them with:
+
+```bash
+# Set required environment variables
+export GITHUB_APP_ID=your_app_id
+export GITHUB_PRIVATE_KEY_PATH=/path/to/key.pem
+export GITHUB_WEBHOOK_SECRET=your_secret
+
+# Run an example
+cargo run --example basic_bot
+```
+
+### Example Structure
+
+Each example demonstrates:
+
+- Complete authentication setup
+- Proper error handling
+- Production-ready patterns
+- Security best practices
+- Logging and observability
+
+See the [examples/](examples/) directory for complete working code with detailed comments.
 
 ## Contributing
 

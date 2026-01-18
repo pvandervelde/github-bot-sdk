@@ -237,6 +237,340 @@ impl EventProcessor for MyEventProcessor {
 }
 ```
 
+## Usage
+
+### Authentication
+
+#### JWT Generation for GitHub Apps
+
+The SDK handles JWT (JSON Web Token) generation automatically for app-level operations:
+
+```rust
+use github_bot_sdk::auth::{GitHubAppId, JsonWebToken};
+
+// JWT tokens are generated automatically by the authentication provider
+// Maximum 10-minute expiration (GitHub requirement)
+// Uses RS256 algorithm (RSA SHA-256)
+```
+
+#### Installation Tokens
+
+Installation tokens provide access to specific installations with scoped permissions:
+
+```rust
+use github_bot_sdk::auth::{InstallationId, InstallationToken};
+
+// Tokens are automatically requested and cached
+// Refresh happens automatically before expiration
+// Respects GitHub's rate limits during token refresh
+
+let installation = client.installation(installation_id);
+// Installation token is obtained and used automatically
+```
+
+#### Token Caching
+
+The SDK includes built-in token caching to minimize API calls:
+
+- Installation tokens are cached until near expiration
+- Automatic refresh with 60-second buffer before expiry
+- Thread-safe cache for concurrent access
+- Configurable cache implementation
+
+### API Operations
+
+#### Repository Operations
+
+```rust
+// Get repository details
+let repo = installation.get_repository("owner", "repo").await?;
+
+// List repositories for installation
+let repos = installation.list_repositories().await?;
+
+// Get branch information
+let branch = installation.get_branch("owner", "repo", "main").await?;
+
+// List all branches
+let branches = installation.list_branches("owner", "repo").await?;
+
+// Create a branch
+installation.create_branch("owner", "repo", "feature-branch", "base-sha").await?;
+
+// Delete a branch
+installation.delete_branch("owner", "repo", "old-branch").await?;
+```
+
+#### Issue Operations
+
+```rust
+// List issues
+let issues = installation.list_issues("owner", "repo").await?;
+
+// Get specific issue
+let issue = installation.get_issue("owner", "repo", 123).await?;
+
+// Create issue
+let new_issue = installation
+    .create_issue("owner", "repo", "Title", "Description")
+    .await?;
+
+// Update issue
+installation
+    .update_issue("owner", "repo", 123, Some("New Title"), Some("Updated body"))
+    .await?;
+
+// Close issue
+installation.close_issue("owner", "repo", 123).await?;
+
+// Add comment
+installation
+    .create_issue_comment("owner", "repo", 123, "Comment text")
+    .await?;
+
+// Add/remove labels
+installation.add_labels("owner", "repo", 123, vec!["bug", "urgent"]).await?;
+installation.remove_label("owner", "repo", 123, "wontfix").await?;
+```
+
+#### Pull Request Operations
+
+```rust
+// List pull requests
+let prs = installation.list_pull_requests("owner", "repo").await?;
+
+// Get specific PR
+let pr = installation.get_pull_request("owner", "repo", 456).await?;
+
+// Create pull request
+let new_pr = installation
+    .create_pull_request(
+        "owner",
+        "repo",
+        "Feature: New capability",
+        "feature-branch",
+        "main",
+        "Detailed description"
+    )
+    .await?;
+
+// Update pull request
+installation
+    .update_pull_request("owner", "repo", 456, Some("Updated title"), None)
+    .await?;
+
+// Merge pull request
+installation
+    .merge_pull_request("owner", "repo", 456, "Merge commit message")
+    .await?;
+
+// Request reviewers
+installation
+    .request_reviewers("owner", "repo", 456, vec!["reviewer1", "reviewer2"])
+    .await?;
+
+// Add review comment
+installation
+    .create_review_comment("owner", "repo", 456, "path/to/file.rs", 10, "Review comment")
+    .await?;
+```
+
+#### Project Operations (GitHub Projects V2)
+
+```rust
+// Get project details
+let project = installation.get_project("owner", "repo", project_id).await?;
+
+// List project items
+let items = installation.list_project_items(project_id).await?;
+
+// Add item to project
+installation.add_project_item(project_id, content_id).await?;
+
+// Update project item field
+installation
+    .update_project_item_field(project_id, item_id, field_id, "value")
+    .await?;
+```
+
+#### Release Operations
+
+```rust
+// List releases
+let releases = installation.list_releases("owner", "repo").await?;
+
+// Get latest release
+let latest = installation.get_latest_release("owner", "repo").await?;
+
+// Create release
+let release = installation
+    .create_release("owner", "repo", "v1.0.0", "Release notes")
+    .await?;
+
+// Upload release asset
+installation
+    .upload_release_asset(release.id, "artifact.zip", asset_bytes)
+    .await?;
+```
+
+#### Workflow Operations
+
+```rust
+// List workflows
+let workflows = installation.list_workflows("owner", "repo").await?;
+
+// Trigger workflow dispatch
+installation
+    .dispatch_workflow("owner", "repo", workflow_id, "main", inputs)
+    .await?;
+
+// List workflow runs
+let runs = installation.list_workflow_runs("owner", "repo", workflow_id).await?;
+```
+
+### Event Processing
+
+#### Parsing Webhook Events
+
+```rust
+use github_bot_sdk::events::{EventEnvelope, parse_webhook};
+
+// Parse incoming webhook
+let envelope = parse_webhook(headers, body)?;
+
+// Access event data
+println!("Event type: {}", envelope.event_type);
+println!("Delivery ID: {}", envelope.delivery_id);
+println!("Installation ID: {:?}", envelope.installation_id);
+
+// Parse specific event payload
+match envelope.event_type.as_str() {
+    "issues" => {
+        let issue_event: IssueEvent = serde_json::from_value(envelope.payload)?;
+        // Handle issue event
+    }
+    "pull_request" => {
+        let pr_event: PullRequestEvent = serde_json::from_value(envelope.payload)?;
+        // Handle PR event
+    }
+    _ => {}
+}
+```
+
+#### Session-Based Processing
+
+```rust
+use github_bot_sdk::events::{Session, SessionConfig};
+
+// Create processing session
+let session = Session::new(SessionConfig::default());
+
+// Process event with session
+session.process(envelope, |ctx| async {
+    // Access installation client via context
+    let client = ctx.installation_client();
+
+    // Perform operations
+    client.create_issue_comment(/*...*/).await?;
+
+    Ok(())
+}).await?;
+```
+
+### Webhook Handling
+
+#### HMAC Signature Validation
+
+```rust
+use github_bot_sdk::webhook::{SignatureValidator, WebhookReceiver};
+
+// Create validator
+let validator = SignatureValidator::new(secret_provider);
+
+// Validate webhook signature
+let signature = request.headers().get("X-Hub-Signature-256")?;
+let is_valid = validator.validate(body, signature).await?;
+
+if !is_valid {
+    return Err("Invalid webhook signature");
+}
+```
+
+#### Complete Webhook Handler
+
+```rust
+use github_bot_sdk::webhook::WebhookHandler;
+
+struct MyWebhookHandler {
+    client: GitHubClient,
+}
+
+#[async_trait::async_trait]
+impl WebhookHandler for MyWebhookHandler {
+    async fn handle(&self, envelope: EventEnvelope) -> Result<(), Box<dyn std::error::Error>> {
+        // Validate event
+        // Process based on event type
+        // Perform GitHub API operations
+        Ok(())
+    }
+}
+```
+
+### Rate Limiting and Retry
+
+#### Automatic Rate Limit Handling
+
+The SDK automatically detects and handles GitHub's rate limits:
+
+```rust
+// Rate limits are detected from response headers
+// Primary rate limits: Automatic backoff before hitting limit
+// Secondary rate limits (429/403): Exponential backoff retry
+// Retry-After headers are respected
+```
+
+#### Retry Configuration
+
+```rust
+use github_bot_sdk::client::ClientConfig;
+use std::time::Duration;
+
+let config = ClientConfig::default()
+    .with_max_retries(5)  // Maximum retry attempts
+    .with_initial_retry_delay(Duration::from_millis(100))
+    .with_max_retry_delay(Duration::from_secs(60))
+    .with_rate_limit_margin(0.1);  // Keep 10% buffer
+
+let client = GitHubClient::builder(auth)
+    .config(config)
+    .build()?;
+```
+
+#### Pagination
+
+```rust
+use github_bot_sdk::client::PagedResponse;
+
+// Automatic pagination support
+let mut page = 1;
+loop {
+    let response: PagedResponse<Issue> = installation
+        .list_issues_paginated("owner", "repo", page)
+        .await?;
+
+    // Process issues
+    for issue in response.items {
+        println!("Issue: {}", issue.title);
+    }
+
+    // Check for next page
+    if response.next_page().is_none() {
+        break;
+    }
+    page += 1;
+}
+```
+
 ## Documentation
 
 - [API Documentation](https://docs.rs/github-bot-sdk)

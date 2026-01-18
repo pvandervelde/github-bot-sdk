@@ -74,8 +74,167 @@ github-bot-sdk = "0.1.0"
 
 ## Quick Start
 
+### Basic Authentication and API Usage
+
 ```rust
-// TODO: Add quick start example
+use github_bot_sdk::{
+    auth::{GitHubAppAuth, AuthConfig, GitHubAppId, InstallationId},
+    client::{GitHubClient, ClientConfig},
+};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Configure authentication
+    let app_id = GitHubAppId::new(123456); // Your GitHub App ID
+    let private_key = std::fs::read_to_string("private-key.pem")?;
+
+    // Create authentication provider
+    // Note: You'll need to implement SecretProvider, JwtSigner, etc.
+    // See documentation for complete implementation examples
+    let auth = create_auth_provider(app_id, private_key).await?;
+
+    // Build GitHub client
+    let client = GitHubClient::builder(auth)
+        .config(ClientConfig::default()
+            .with_user_agent("my-bot/1.0")
+            .with_timeout(std::time::Duration::from_secs(30)))
+        .build()?;
+
+    // Get app information
+    let app = client.get_app().await?;
+    println!("Authenticated as: {}", app.name);
+
+    // Create installation client for specific installation
+    let installation_id = InstallationId::new(98765);
+    let installation_client = client.installation(installation_id);
+
+    // Use the installation client for operations
+    let repos = installation_client.list_repositories().await?;
+    println!("Found {} repositories", repos.len());
+
+    Ok(())
+}
+```
+
+### Webhook Validation
+
+```rust
+use github_bot_sdk::webhook::SignatureValidator;
+use github_bot_sdk::auth::SecretProvider;
+use std::sync::Arc;
+
+async fn handle_webhook(
+    validator: &SignatureValidator,
+    payload: &[u8],
+    signature: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Validate webhook signature
+    if validator.validate(payload, signature).await? {
+        println!("✓ Valid webhook signature");
+
+        // Parse and process the webhook
+        let event: serde_json::Value = serde_json::from_slice(payload)?;
+        println!("Event type: {}", event["action"]);
+
+        // Handle the event...
+
+        Ok(())
+    } else {
+        Err("Invalid webhook signature")?
+    }
+}
+```
+
+### Repository Operations
+
+```rust
+use github_bot_sdk::client::{GitHubClient, RepositoryClient};
+use github_bot_sdk::auth::{InstallationId, RepositoryId};
+
+async fn repository_operations(
+    client: &GitHubClient,
+    installation_id: InstallationId,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let installation = client.installation(installation_id);
+
+    // Get repository information
+    let repo = installation
+        .get_repository("owner", "repo")
+        .await?;
+    println!("Repository: {} (stars: {})", repo.full_name, repo.stargazers_count);
+
+    // List branches
+    let branches = installation
+        .list_branches("owner", "repo")
+        .await?;
+
+    for branch in branches {
+        println!("Branch: {}", branch.name);
+    }
+
+    Ok(())
+}
+```
+
+### Issue and Pull Request Operations
+
+```rust
+use github_bot_sdk::client::{IssueClient, PullRequestClient};
+
+async fn issue_pr_operations(
+    installation: &InstallationClient,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create an issue
+    let issue = installation
+        .create_issue("owner", "repo", "Bug Report", "Found a bug...")
+        .await?;
+    println!("Created issue #{}", issue.number);
+
+    // Add a comment
+    installation
+        .create_issue_comment("owner", "repo", issue.number, "Looking into this...")
+        .await?;
+
+    // Get pull requests
+    let prs = installation
+        .list_pull_requests("owner", "repo")
+        .await?;
+
+    for pr in prs {
+        println!("PR #{}: {}", pr.number, pr.title);
+    }
+
+    Ok(())
+}
+```
+
+### Event Processing
+
+```rust
+use github_bot_sdk::events::{EventEnvelope, EventProcessor};
+
+struct MyEventProcessor;
+
+#[async_trait::async_trait]
+impl EventProcessor for MyEventProcessor {
+    async fn process(&self, envelope: EventEnvelope) -> Result<(), Box<dyn std::error::Error>> {
+        match envelope.event_type.as_str() {
+            "issues" => {
+                println!("Issue event: {:?}", envelope.payload);
+                // Handle issue event
+            }
+            "pull_request" => {
+                println!("PR event: {:?}", envelope.payload);
+                // Handle pull request event
+            }
+            _ => {
+                println!("Unhandled event: {}", envelope.event_type);
+            }
+        }
+        Ok(())
+    }
+}
 ```
 
 ## Documentation

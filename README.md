@@ -811,7 +811,81 @@ See the [examples/](examples/) directory for complete working code with detailed
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+### Quick Start for Contributors
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/YOUR_USERNAME/github-bot-sdk.git
+cd github-bot-sdk
+
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Make your changes, add tests, update docs
+
+# Run tests and linters
+cargo test
+cargo clippy -- -D warnings
+cargo fmt
+
+# Commit with conventional commit format
+git commit -m "feat: add new feature"
+
+# Push and create pull request
+git push origin feature/your-feature-name
+```
+
+### Contribution Guidelines
+
+- **Follow the Code of Conduct**: Be respectful and inclusive
+- **Write Tests**: All new features must have comprehensive tests
+- **Document Changes**: Update rustdoc comments and specifications
+- **Follow Conventions**: Use conventional commits for automated versioning
+- **Check CI**: Ensure all CI checks pass before requesting review
+- **Sign Commits**: Use signed commits (optional but recommended)
+
+### Areas for Contribution
+
+- **Features**: Implement additional GitHub API endpoints
+- **Documentation**: Improve examples, guides, and API docs
+- **Testing**: Add more test coverage or integration tests
+- **Performance**: Optimize hot paths or reduce allocations
+- **Bug Fixes**: Report and fix issues
+- **Examples**: Create new example bots demonstrating use cases
+
+## Changelog and Versioning
+
+### Semantic Versioning
+
+This project follows [Semantic Versioning](https://semver.org/):
+
+- **MAJOR** version for incompatible API changes
+- **MINOR** version for backwards-compatible functionality additions
+- **PATCH** version for backwards-compatible bug fixes
+
+### Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes in each release.
+
+Changelog is automatically generated from conventional commits using [git-cliff](https://github.com/orhun/git-cliff).
+
+### Release Process
+
+Releases are automated using [release-plz](https://github.com/MarcoIeni/release-plz):
+
+1. Commits are analyzed for semantic versioning impact
+2. CHANGELOG.md is automatically updated
+3. Version is bumped in Cargo.toml
+4. GitHub release is created with notes
+5. Crate is published to crates.io
+
+### Versioning Policy
+
+- **Stable releases** (1.0+): Breaking changes require major version bump
+- **Pre-1.0 releases** (0.x): Minor versions may include breaking changes
+- **Release Candidates**: Tagged as `vX.Y.Z-rc.N` for testing before stable release
 
 ## License
 

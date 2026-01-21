@@ -230,8 +230,8 @@
 //!
 //! - [`AuthError::InvalidCredentials`] - Invalid private key or app ID
 //! - [`AuthError::TokenExpired`] - Token has expired and needs refresh
-//! - [`AuthError::PermissionDenied`] - Insufficient permissions for operation
-//! - [`AuthError::RateLimitExceeded`] - GitHub rate limit hit
+//! - [`AuthError::InsufficientPermissions`] - Insufficient permissions for operation
+//! - [`AuthError::GitHubApiError`] - GitHub API errors including rate limiting
 //! - [`AuthError::NetworkError`] - Network connectivity issues
 //!
 //! All errors include context for debugging and support retry classification.

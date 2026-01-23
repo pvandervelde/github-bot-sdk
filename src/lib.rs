@@ -73,15 +73,10 @@
 //! let app = client.get_app().await?;
 //! println!("Authenticated as: {}", app.name);
 //!
-//! // Work with specific installation
+//! // Get installation information
 //! let installation_id = InstallationId::new(12345);
-//! let installation_client = client.installation(installation_id);
-//!
-//! // List repositories accessible to this installation
-//! let repos = installation_client.list_repositories().await?;
-//! for repo in repos {
-//!     println!("Repository: {}", repo.full_name);
-//! }
+//! let installation = client.get_installation(installation_id).await?;
+//! println!("Installation ID: {}", installation.id.as_u64());
 //! # Ok(())
 //! # }
 //! ```
@@ -92,18 +87,12 @@
 //! # use github_bot_sdk::client::GitHubClient;
 //! # use github_bot_sdk::auth::InstallationId;
 //! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
-//! let installation = client.installation(InstallationId::new(12345));
+//! let installation_id = InstallationId::new(12345);
+//! let installation = client.get_installation(installation_id).await?;
 //!
-//! // Get repository details
-//! let repo = installation.get_repository("owner", "repo").await?;
-//! println!("Repository: {} (⭐ {})", repo.full_name, repo.stargazers_count);
-//!
-//! // Work with branches
-//! let branch = installation.get_branch("owner", "repo", "main").await?;
-//! println!("Main branch commit: {}", branch.commit.sha);
-//!
-//! // Create a new branch
-//! installation.create_branch("owner", "repo", "feature", &branch.commit.sha).await?;
+//! // Get installation details
+//! println!("Installation ID: {}", installation.id.as_u64());
+//! println!("Account: {}", installation.account.login);
 //! # Ok(())
 //! # }
 //! ```
@@ -114,29 +103,13 @@
 //! # use github_bot_sdk::client::GitHubClient;
 //! # use github_bot_sdk::auth::InstallationId;
 //! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
-//! let installation = client.installation(InstallationId::new(12345));
+//! let installation_id = InstallationId::new(12345);
 //!
-//! // Create an issue
-//! let issue = installation
-//!     .create_issue("owner", "repo", "Bug found", "Description of bug...")
-//!     .await?;
-//! println!("Created issue #{}", issue.number);
+//! // Get installation to work with issues and pull requests
+//! let installation = client.get_installation(installation_id).await?;
+//! println!("Working with installation: {}", installation.id.as_u64());
 //!
-//! // Add a comment
-//! installation
-//!     .create_issue_comment("owner", "repo", issue.number, "Looking into this!")
-//!     .await?;
-//!
-//! // Add labels
-//! installation
-//!     .add_labels("owner", "repo", issue.number, vec!["bug", "priority:high"])
-//!     .await?;
-//!
-//! // Work with pull requests
-//! let prs = installation.list_pull_requests("owner", "repo").await?;
-//! for pr in prs {
-//!     println!("PR #{}: {} ({})", pr.number, pr.title, pr.state);
-//! }
+//! // See client module documentation for repository, issue, and PR operations
 //! # Ok(())
 //! # }
 //! ```

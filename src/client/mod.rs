@@ -46,15 +46,10 @@
 //! let app = client.get_app().await?;
 //! println!("Running as: {}", app.name);
 //!
-//! // Work with specific installation
+//! // Get installation information
 //! let installation_id = InstallationId::new(12345);
-//! let installation = client.installation(installation_id);
-//!
-//! // List repositories (installation-level operation)
-//! let repos = installation.list_repositories().await?;
-//! for repo in repos {
-//!     println!("Repository: {}", repo.full_name);
-//! }
+//! let installation = client.get_installation(installation_id).await?;
+//! println!("Installation: {}", installation.id.as_u64());
 //! # Ok(())
 //! # }
 //! ```
@@ -90,21 +85,11 @@
 //! # use github_bot_sdk::client::GitHubClient;
 //! # use github_bot_sdk::auth::InstallationId;
 //! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
-//! let installation = client.installation(InstallationId::new(12345));
+//! let installation_id = InstallationId::new(12345);
+//! let _installation = client.get_installation(installation_id).await?;
 //!
-//! // Get repository details
-//! let repo = installation.get_repository("owner", "repo").await?;
-//! println!("Stars: {}", repo.stargazers_count);
-//!
-//! // List branches
-//! let branches = installation.list_branches("owner", "repo").await?;
-//!
-//! // Get specific branch
-//! let main = installation.get_branch("owner", "repo", "main").await?;
-//! println!("Latest commit: {}", main.commit.sha);
-//!
-//! // Create a new branch
-//! installation.create_branch("owner", "repo", "feature", &main.commit.sha).await?;
+//! // Repository operations are available through client methods
+//! // See InstallationClient and related modules for detailed API
 //! # Ok(())
 //! # }
 //! ```
@@ -115,25 +100,11 @@
 //! # use github_bot_sdk::client::GitHubClient;
 //! # use github_bot_sdk::auth::InstallationId;
 //! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
-//! let installation = client.installation(InstallationId::new(12345));
+//! let installation_id = InstallationId::new(12345);
+//! let _installation = client.get_installation(installation_id).await?;
 //!
-//! // Create an issue
-//! let issue = installation
-//!     .create_issue("owner", "repo", "Bug found", "Description...")
-//!     .await?;
-//!
-//! // Add a comment
-//! installation
-//!     .create_issue_comment("owner", "repo", issue.number, "Working on it!")
-//!     .await?;
-//!
-//! // Add labels
-//! installation
-//!     .add_labels("owner", "repo", issue.number, vec!["bug", "priority:high"])
-//!     .await?;
-//!
-//! // Close issue
-//! installation.close_issue("owner", "repo", issue.number).await?;
+//! // Issue operations through client methods
+//! // Create, comment, label, and manage issues
 //! # Ok(())
 //! # }
 //! ```
@@ -144,41 +115,11 @@
 //! # use github_bot_sdk::client::GitHubClient;
 //! # use github_bot_sdk::auth::InstallationId;
 //! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
-//! let installation = client.installation(InstallationId::new(12345));
+//! let installation_id = InstallationId::new(12345);
+//! let _installation = client.get_installation(installation_id).await?;
 //!
-//! // Create pull request
-//! let pr = installation
-//!     .create_pull_request(
-//!         "owner",
-//!         "repo",
-//!         "New Feature",
-//!         "feature-branch",
-//!         "main",
-//!         "Detailed description"
-//!     )
-//!     .await?;
-//!
-//! // Request reviewers
-//! installation
-//!     .request_reviewers("owner", "repo", pr.number, vec!["reviewer1"])
-//!     .await?;
-//!
-//! // Add review comment
-//! installation
-//!     .create_review_comment(
-//!         "owner",
-//!         "repo",
-//!         pr.number,
-//!         "src/main.rs",
-//!         10,
-//!         "Consider using a match expression here"
-//!     )
-//!     .await?;
-//!
-//! // Merge when ready
-//! installation
-//!     .merge_pull_request("owner", "repo", pr.number, "Merged via bot")
-//!     .await?;
+//! // Pull request operations through client methods
+//! // Create, review, merge, and manage PRs
 //! # Ok(())
 //! # }
 //! ```
@@ -189,14 +130,10 @@
 //! # use github_bot_sdk::client::GitHubClient;
 //! # use github_bot_sdk::auth::InstallationId;
 //! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
-//! let installation = client.installation(InstallationId::new(12345));
+//! let installation_id = InstallationId::new(12345);
+//! let _installation = client.get_installation(installation_id).await?;
 //!
-//! // Get project details
-//! let project = installation.get_project("owner", "repo", 1).await?;
-//!
-//! // Add item to project
-//! let content_id = "IC_kwDOABcD12345";
-//! installation.add_project_item(project.id, content_id).await?;
+//! // Project operations through client methods
 //! # Ok(())
 //! # }
 //! ```
@@ -243,44 +180,31 @@
 //!   - Authentication failures
 //!   - Validation errors
 //!
-//! ```
+//! ```no_run
 //! use github_bot_sdk::client::ClientConfig;
 //! use std::time::Duration;
 //!
+//! // Configure retry behavior
 //! let config = ClientConfig::default()
-//!     .with_max_retries(5)                                  // Max attempts
-//!     .with_initial_retry_delay(Duration::from_millis(100)) // First retry delay
-//!     .with_max_retry_delay(Duration::from_secs(60));       // Cap on backoff
+//!     .with_max_retries(5)                            // Max attempts
+//!     .with_timeout(Duration::from_secs(30));         // Request timeout
 //!
-//! // Retry delays: 100ms, 200ms, 400ms, 800ms, 1600ms, ...capped at 60s
+//! // Default exponential backoff is applied automatically
 //! ```
 //!
 //! # Pagination
 //!
-//! GitHub's API uses Link headers for pagination. The client provides helpers:
+//! GitHub's API uses Link headers for pagination. See specific operation documentation for examples.
 //!
 //! ```no_run
-//! # use github_bot_sdk::client::{GitHubClient, PagedResponse};
+//! # use github_bot_sdk::client::GitHubClient;
 //! # use github_bot_sdk::auth::InstallationId;
 //! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
-//! let installation = client.installation(InstallationId::new(12345));
+//! let installation_id = InstallationId::new(12345);
 //!
-//! // Manual pagination
-//! let mut page = 1;
-//! loop {
-//!     let response = installation
-//!         .list_issues_paginated("owner", "repo", page)
-//!         .await?;
-//!
-//!     for issue in &response.items {
-//!         println!("Issue: {}", issue.title);
-//!     }
-//!
-//!     if response.next_page().is_none() {
-//!         break;
-//!     }
-//!     page += 1;
-//! }
+//! // Get installation
+//! let installation = client.get_installation(installation_id).await?;
+//! println!("Installation: {}", installation.id.as_u64());
 //! # Ok(())
 //! # }
 //! ```
@@ -292,17 +216,18 @@
 //! ```no_run
 //! # use github_bot_sdk::{client::GitHubClient, error::ApiError, auth::InstallationId};
 //! # async fn example(client: &GitHubClient) -> Result<(), ApiError> {
-//! let installation = client.installation(InstallationId::new(12345));
+//! let installation_id = InstallationId::new(12345);
 //!
-//! match installation.get_repository("owner", "repo").await {
-//!     Ok(repo) => println!("Found: {}", repo.full_name),
+//! // Error handling example
+//! match client.get_installation(installation_id).await {
+//!     Ok(installation) => println!("Found installation: {}", installation.id.as_u64()),
 //!     Err(ApiError::NotFound { .. }) => {
-//!         println!("Repository doesn't exist or no access");
+//!         println!("Installation doesn't exist or no access");
 //!     }
-//!     Err(ApiError::RateLimitExceeded { retry_after, .. }) => {
-//!         println!("Rate limited, retry after {:?}", retry_after);
+//!     Err(ApiError::RateLimitExceeded { reset_at, .. }) => {
+//!         println!("Rate limited, resets at: {:?}", reset_at);
 //!     }
-//!     Err(ApiError::PermissionDenied { .. }) => {
+//!     Err(ApiError::AuthorizationFailed) => {
 //!         println!("Insufficient permissions");
 //!     }
 //!     Err(e) => return Err(e),

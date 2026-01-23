@@ -82,10 +82,6 @@
 //! if jwt.expires_soon(Duration::minutes(5)) {
 //!     println!("Token expires in less than 5 minutes - should refresh proactively");
 //! }
-//!
-//! // Get time remaining until expiration
-//! let remaining = jwt.expires_in();
-//! println!("Token valid for {} more seconds", remaining.num_seconds());
 //! ```
 //!
 //! ## Implementing Authentication Provider
@@ -153,25 +149,24 @@
 //! Installation tokens include permission information:
 //!
 //! ```
-//! use github_bot_sdk::auth::{InstallationPermissions, Permission, PermissionLevel};
-//! use std::collections::HashMap;
+//! use github_bot_sdk::auth::{InstallationPermissions, PermissionLevel};
 //!
+//! // Create permissions with struct fields (not HashMap)
 //! let mut permissions = InstallationPermissions {
-//!     permissions: HashMap::new(),
+//!     issues: PermissionLevel::Write,
+//!     pull_requests: PermissionLevel::Write,
+//!     contents: PermissionLevel::Write,
+//!     metadata: PermissionLevel::Read,
+//!     checks: PermissionLevel::None,
+//!     actions: PermissionLevel::None,
 //! };
 //!
-//! // Add permissions
-//! permissions.permissions.insert(Permission::Contents, PermissionLevel::Write);
-//! permissions.permissions.insert(Permission::Issues, PermissionLevel::Write);
-//! permissions.permissions.insert(Permission::Metadata, PermissionLevel::Read);
-//!
-//! // Check permissions
-//! if let Some(level) = permissions.permissions.get(&Permission::Contents) {
-//!     match level {
-//!         PermissionLevel::Read => println!("Read-only access to contents"),
-//!         PermissionLevel::Write => println!("Read-write access to contents"),
-//!         PermissionLevel::Admin => println!("Admin access to contents"),
-//!     }
+//! // Check permissions via fields
+//! match permissions.contents {
+//!     PermissionLevel::Read => println!("Read-only access to contents"),
+//!     PermissionLevel::Write => println!("Read-write access to contents"),
+//!     PermissionLevel::Admin => println!("Admin access to contents"),
+//!     PermissionLevel::None => println!("No access to contents"),
 //! }
 //! ```
 //!

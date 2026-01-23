@@ -90,9 +90,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let private_key = std::fs::read_to_string("private-key.pem")?;
 
     // Create authentication provider
-    // Note: You'll need to implement SecretProvider, JwtSigner, etc.
-    // See documentation for complete implementation examples
-    let auth = create_auth_provider(app_id, private_key).await?;
+    // Note: This is pseudocode. You need to implement AuthenticationProvider trait
+    // or use a provided implementation. See auth module documentation for details.
+    let auth = MyAuthProvider::new(app_id, private_key)?;
 
     // Build GitHub client
     let client = GitHubClient::builder(auth)
@@ -180,30 +180,22 @@ async fn repository_operations(
 ### Issue and Pull Request Operations
 
 ```rust
-use github_bot_sdk::client::{IssueClient, PullRequestClient};
+use github_bot_sdk::client::GitHubClient;
+use github_bot_sdk::auth::InstallationId;
 
 async fn issue_pr_operations(
-    installation: &InstallationClient,
+    client: &GitHubClient,
+    installation_id: InstallationId,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Create an issue
-    let issue = installation
-        .create_issue("owner", "repo", "Bug Report", "Found a bug...")
-        .await?;
-    println!("Created issue #{}", issue.number);
+    // Get installation
+    let installation = client.get_installation(installation_id).await?;
+    println!("Working with installation: {}", installation.id.as_u64());
 
-    // Add a comment
-    installation
-        .create_issue_comment("owner", "repo", issue.number, "Looking into this...")
-        .await?;
+    // Note: Full issue/PR operations are available through client methods
+    // See client module documentation for complete API
 
-    // Get pull requests
-    let prs = installation
-        .list_pull_requests("owner", "repo")
-        .await?;
-
-    for pr in prs {
-        println!("PR #{}: {}", pr.number, pr.title);
-    }
+    Ok(())
+}
 
     Ok(())
 }
@@ -213,10 +205,11 @@ async fn issue_pr_operations(
 
 ```rust
 use github_bot_sdk::events::{EventEnvelope, EventProcessor};
+use async_trait::async_trait;
 
 struct MyEventProcessor;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl EventProcessor for MyEventProcessor {
     async fn process(&self, envelope: EventEnvelope) -> Result<(), Box<dyn std::error::Error>> {
         match envelope.event_type.as_str() {
@@ -460,18 +453,15 @@ match envelope.event_type.as_str() {
 #### Session-Based Processing
 
 ```rust
-use github_bot_sdk::events::{Session, SessionConfig};
+use github_bot_sdk::events::SessionManager;
 
-// Create processing session
-let session = Session::new(SessionConfig::default());
+// Note: Session API is provided for managing event processing state
+// Create session manager
+let session_manager = SessionManager::new();
 
-// Process event with session
-session.process(envelope, |ctx| async {
-    // Access installation client via context
-    let client = ctx.installation_client();
-
-    // Perform operations
-    client.create_issue_comment(/*...*/).await?;
+// Track event processing
+let session_id = session_manager.create_session().await;
+println!("Created session: {}", session_id);
 
     Ok(())
 }).await?;
@@ -551,23 +541,13 @@ let client = GitHubClient::builder(auth)
 ```rust
 use github_bot_sdk::client::PagedResponse;
 
-// Automatic pagination support
-let mut page = 1;
-loop {
-    let response: PagedResponse<Issue> = installation
-        .list_issues_paginated("owner", "repo", page)
-        .await?;
-
-    // Process issues
-    for issue in response.items {
-        println!("Issue: {}", issue.title);
-    }
-
-    // Check for next page
-    if response.next_page().is_none() {
-        break;
-    }
-    page += 1;
+// Pagination is handled via PagedResponse type
+// Extract page numbers from Link headers
+// See client::pagination module for utilities
+// Example:
+let next_page = PagedResponse::extract_page_number(&link_header, "next");
+if let Some(page) = next_page {
+    println!("Next page: {}", page);
 }
 ```
 

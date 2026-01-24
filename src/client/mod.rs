@@ -1,10 +1,257 @@
 //! GitHub API client for authenticated operations.
 //!
-//! This module provides the main `GitHubClient` for making authenticated API calls
-//! to GitHub as a GitHub App. It supports both app-level operations (using JWT tokens)
-//! and installation-level operations (using installation tokens).
+//! This module provides the primary interface for interacting with GitHub's REST API as a GitHub App.
+//! It handles authentication, rate limiting, retries, pagination, and provides type-safe operations
+//! for repositories, issues, pull requests, projects, and more.
 //!
-//! See `docs/specs/interfaces/` for complete interface specifications.
+//! # Overview
+//!
+//! The client operates at two levels:
+//!
+//! - **App-level** ([`GitHubClient`]) - Operations as the GitHub App itself (using JWT)
+//! - **Installation-level** ([`InstallationClient`]) - Operations within a specific installation (using installation tokens)
+//!
+//! Most operations happen at the installation level, where you interact with repositories,
+//! issues, pull requests, etc. on behalf of the installation.
+//!
+//! # Features
+//!
+//! - **Automatic Authentication** - Tokens are injected and refreshed automatically
+//! - **Rate Limit Handling** - Detects rate limits and backs off appropriately
+//! - **Retry Logic** - Exponential backoff for transient failures (network errors, 5xx responses)
+//! - **Pagination Support** - Helper methods for paginated API responses
+//! - **Type Safety** - Strongly-typed request and response models
+//! - **Configurable** - Timeouts, retry behavior, rate limit margins
+//!
+//! # Quick Start
+//!
+//! ```no_run
+//! use github_bot_sdk::{
+//!     auth::{AuthenticationProvider, InstallationId},
+//!     client::{GitHubClient, ClientConfig},
+//!     error::ApiError,
+//! };
+//! use std::time::Duration;
+//!
+//! # async fn example(auth: impl AuthenticationProvider + 'static) -> Result<(), ApiError> {
+//! // Create client with custom configuration
+//! let client = GitHubClient::builder(auth)
+//!     .config(ClientConfig::default()
+//!         .with_user_agent("my-bot/1.0")
+//!         .with_timeout(Duration::from_secs(30))
+//!         .with_max_retries(5))
+//!     .build()?;
+//!
+//! // Get app information (app-level operation)
+//! let app = client.get_app().await?;
+//! println!("Running as: {}", app.name);
+//!
+//! // Get installation information
+//! let installation_id = InstallationId::new(12345);
+//! let installation = client.get_installation(installation_id).await?;
+//! println!("Installation: {}", installation.id.as_u64());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Configuration
+//!
+//! Use [`ClientConfig`] to customize client behavior:
+//!
+//! ```
+//! use github_bot_sdk::client::ClientConfig;
+//! use std::time::Duration;
+//!
+//! let config = ClientConfig::default()
+//!     .with_user_agent("my-github-bot/1.0")           // Required by GitHub
+//!     .with_timeout(Duration::from_secs(60))          // Request timeout
+//!     .with_max_retries(5)                            // Max retry attempts
+//!     .with_rate_limit_margin(0.1)                    // Keep 10% rate limit buffer
+//!     .with_github_api_url("https://api.github.com"); // Override for GHE
+//!
+//! // Or use the builder pattern
+//! let config = ClientConfig::builder()
+//!     .user_agent("my-bot/2.0")
+//!     .timeout(Duration::from_secs(45))
+//!     .max_retries(3)
+//!     .build();
+//! ```
+//!
+//! # Operations by Category
+//!
+//! ## Repository Operations
+//!
+//! ```no_run
+//! # use github_bot_sdk::client::GitHubClient;
+//! # use github_bot_sdk::auth::InstallationId;
+//! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
+//! let installation_id = InstallationId::new(12345);
+//! let _installation = client.get_installation(installation_id).await?;
+//!
+//! // Repository operations are available through client methods
+//! // See InstallationClient and related modules for detailed API
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Issue Operations
+//!
+//! ```no_run
+//! # use github_bot_sdk::client::GitHubClient;
+//! # use github_bot_sdk::auth::InstallationId;
+//! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
+//! let installation_id = InstallationId::new(12345);
+//! let _installation = client.get_installation(installation_id).await?;
+//!
+//! // Issue operations through client methods
+//! // Create, comment, label, and manage issues
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Pull Request Operations
+//!
+//! ```no_run
+//! # use github_bot_sdk::client::GitHubClient;
+//! # use github_bot_sdk::auth::InstallationId;
+//! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
+//! let installation_id = InstallationId::new(12345);
+//! let _installation = client.get_installation(installation_id).await?;
+//!
+//! // Pull request operations through client methods
+//! // Create, review, merge, and manage PRs
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Project Operations (GitHub Projects V2)
+//!
+//! ```no_run
+//! # use github_bot_sdk::client::GitHubClient;
+//! # use github_bot_sdk::auth::InstallationId;
+//! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
+//! let installation_id = InstallationId::new(12345);
+//! let _installation = client.get_installation(installation_id).await?;
+//!
+//! // Project operations through client methods
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Rate Limiting
+//!
+//! The client automatically handles GitHub's rate limits:
+//!
+//! - **Detection** - Monitors `X-RateLimit-*` headers in responses
+//! - **Proactive Backoff** - Slows down when approaching limit (configurable margin)
+//! - **Reactive Handling** - Respects `Retry-After` headers on 429 responses
+//! - **Secondary Rate Limits** - Handles abuse detection (403 with retry-after)
+//!
+//! ```no_run
+//! # use github_bot_sdk::client::{GitHubClient, ClientConfig};
+//! # use github_bot_sdk::auth::AuthenticationProvider;
+//! # async fn example(auth: impl AuthenticationProvider + 'static) -> Result<(), Box<dyn std::error::Error>> {
+//! // Configure rate limit behavior
+//! let config = ClientConfig::default()
+//!     .with_rate_limit_margin(0.15);  // Start backing off at 85% of limit
+//!
+//! let client = GitHubClient::builder(auth)
+//!     .config(config)
+//!     .build()?;
+//!
+//! // Client will automatically handle rate limits
+//! // No manual rate limit checking needed
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Retry Behavior
+//!
+//! The client automatically retries transient failures with exponential backoff:
+//!
+//! - **Retryable Errors**:
+//!   - Network errors (timeouts, connection failures)
+//!   - 5xx server errors (GitHub is having issues)
+//!   - 429 rate limit exceeded (respects Retry-After)
+//!   - 403 with Retry-After (secondary rate limit)
+//!
+//! - **Non-Retryable Errors**:
+//!   - 4xx client errors (except 429 and some 403s)
+//!   - Authentication failures
+//!   - Validation errors
+//!
+//! ```no_run
+//! use github_bot_sdk::client::ClientConfig;
+//! use std::time::Duration;
+//!
+//! // Configure retry behavior
+//! let config = ClientConfig::default()
+//!     .with_max_retries(5)                            // Max attempts
+//!     .with_timeout(Duration::from_secs(30));         // Request timeout
+//!
+//! // Default exponential backoff is applied automatically
+//! ```
+//!
+//! # Pagination
+//!
+//! GitHub's API uses Link headers for pagination. See specific operation documentation for examples.
+//!
+//! ```no_run
+//! # use github_bot_sdk::client::GitHubClient;
+//! # use github_bot_sdk::auth::InstallationId;
+//! # async fn example(client: &GitHubClient) -> Result<(), Box<dyn std::error::Error>> {
+//! let installation_id = InstallationId::new(12345);
+//!
+//! // Get installation
+//! let installation = client.get_installation(installation_id).await?;
+//! println!("Installation: {}", installation.id.as_u64());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Error Handling
+//!
+//! All operations return [`Result<T, ApiError>`]:
+//!
+//! ```no_run
+//! # use github_bot_sdk::{client::GitHubClient, error::ApiError, auth::InstallationId};
+//! # async fn example(client: &GitHubClient) -> Result<(), ApiError> {
+//! let installation_id = InstallationId::new(12345);
+//!
+//! // Error handling example
+//! match client.get_installation(installation_id).await {
+//!     Ok(installation) => println!("Found installation: {}", installation.id.as_u64()),
+//!     Err(ApiError::NotFound { .. }) => {
+//!         println!("Installation doesn't exist or no access");
+//!     }
+//!     Err(ApiError::RateLimitExceeded { reset_at, .. }) => {
+//!         println!("Rate limited, resets at: {:?}", reset_at);
+//!     }
+//!     Err(ApiError::AuthorizationFailed) => {
+//!         println!("Insufficient permissions");
+//!     }
+//!     Err(e) => return Err(e),
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # GitHub Enterprise Support
+//!
+//! To use with GitHub Enterprise Server, configure the API base URL:
+//!
+//! ```
+//! use github_bot_sdk::client::ClientConfig;
+//!
+//! let config = ClientConfig::default()
+//!     .with_github_api_url("https://github.example.com/api/v3");
+//! ```
+//!
+//! # See Also
+//!
+//! - [`crate::auth`] - Authentication types and providers
+//! - [`crate::webhook`] - Webhook validation for incoming events
+//! - [GitHub REST API Documentation](https://docs.github.com/en/rest)
 
 mod app;
 mod installation;

@@ -1,12 +1,254 @@
 //! GitHub App authentication types and interfaces.
 //!
-//! This module provides core authentication types for GitHub Apps including:
-//! - ID types (GitHubAppId, InstallationId, RepositoryId, UserId)
-//! - Token types (JsonWebToken, InstallationToken)
-//! - Permission and installation metadata
-//! - Authentication trait interfaces
+//! This module provides the authentication foundation for GitHub Apps, handling the complexities
+//! of GitHub's two-tier authentication model with type safety and production-ready patterns.
 //!
-//! See `docs/specs/interfaces/` for complete interface specifications.
+//! # Overview
+//!
+//! GitHub Apps use a two-tier authentication system:
+//!
+//! 1. **App-level JWT tokens** - Short-lived (max 10 minutes) tokens for app-level operations
+//! 2. **Installation tokens** - Scoped tokens for operations within specific installations
+//!
+//! This module provides:
+//!
+//! - **ID Types** - Branded types for [`GitHubAppId`], [`InstallationId`], [`RepositoryId`], [`UserId`]
+//! - **Token Types** - [`JsonWebToken`] and [`InstallationToken`] with automatic expiration tracking
+//! - **Permission Models** - [`InstallationPermissions`] and [`PermissionLevel`] for access control
+//! - **Trait Interfaces** - [`AuthenticationProvider`], [`SecretProvider`], [`TokenCache`], [`JwtSigner`]
+//! - **Metadata Types** - [`Installation`], [`Repository`], [`User`] for GitHub entities
+//!
+//! # Authentication Flow
+//!
+//! ```text
+//! ┌─────────────────┐
+//! │  GitHub App ID  │
+//! │  + Private Key  │
+//! └────────┬────────┘
+//!          │
+//!          ▼
+//! ┌─────────────────┐
+//! │   JWT Token     │  ◄── Sign with RS256 (max 10 min expiry)
+//! │ (App-level)     │
+//! └────────┬────────┘
+//!          │
+//!          ▼
+//! ┌─────────────────┐
+//! │  Installation   │  ◄── Exchange JWT for installation token
+//! │     Token       │      (scoped to installation permissions)
+//! └─────────────────┘
+//! ```
+//!
+//! # Usage Examples
+//!
+//! ## Working with ID Types
+//!
+//! ID types use the newtype pattern to prevent mixing up different identifier types:
+//!
+//! ```
+//! use github_bot_sdk::auth::{GitHubAppId, InstallationId, RepositoryId};
+//!
+//! // Create IDs - type-safe, cannot be confused
+//! let app_id = GitHubAppId::new(123456);
+//! let installation_id = InstallationId::new(789012);
+//! let repo_id = RepositoryId::new(345678);
+//!
+//! // Parse from strings
+//! let app_id: GitHubAppId = "123456".parse().unwrap();
+//! assert_eq!(app_id.as_u64(), 123456);
+//!
+//! // Convert to strings for display
+//! println!("App ID: {}", app_id);  // Prints: App ID: 123456
+//! ```
+//!
+//! ## Token Expiration Checking
+//!
+//! Tokens automatically track expiration and provide methods to check validity:
+//!
+//! ```
+//! use github_bot_sdk::auth::{JsonWebToken, GitHubAppId};
+//! use chrono::{Utc, Duration};
+//!
+//! let app_id = GitHubAppId::new(123);
+//! let expires_at = Utc::now() + Duration::minutes(10);
+//! let jwt = JsonWebToken::new("eyJhbGc...".to_string(), app_id, expires_at);
+//!
+//! // Check if token is expired
+//! if jwt.is_expired() {
+//!     println!("Token has expired - need to generate new one");
+//! }
+//!
+//! // Check if token expires soon (within specified duration)
+//! if jwt.expires_soon(Duration::minutes(5)) {
+//!     println!("Token expires in less than 5 minutes - should refresh proactively");
+//! }
+//! ```
+//!
+//! ## Implementing Authentication Provider
+//!
+//! The [`AuthenticationProvider`] trait is the main interface for authentication:
+//!
+//! ```no_run
+//! use github_bot_sdk::auth::{
+//!     AuthenticationProvider, GitHubAppId, InstallationId,
+//!     JsonWebToken, InstallationToken, Installation, Repository
+//! };
+//! use github_bot_sdk::error::AuthError;
+//! use async_trait::async_trait;
+//!
+//! struct MyAuthProvider {
+//!     // Your implementation fields
+//! }
+//!
+//! #[async_trait]
+//! impl AuthenticationProvider for MyAuthProvider {
+//!     async fn app_token(&self) -> Result<JsonWebToken, AuthError> {
+//!         // Generate JWT for app-level operations
+//!         // - Read private key from secure storage
+//!         // - Sign JWT claims with RS256
+//!         // - Set 10-minute expiration
+//!         # todo!()
+//!     }
+//!
+//!     async fn installation_token(
+//!         &self,
+//!         installation_id: InstallationId,
+//!     ) -> Result<InstallationToken, AuthError> {
+//!         // Get installation token
+//!         // - Generate app JWT
+//!         // - Exchange for installation token via GitHub API
+//!         // - Cache token until near expiration
+//!         # todo!()
+//!     }
+//!
+//!     async fn refresh_installation_token(
+//!         &self,
+//!         installation_id: InstallationId,
+//!     ) -> Result<InstallationToken, AuthError> {
+//!         // Force refresh - bypass cache
+//!         # todo!()
+//!     }
+//!
+//!     async fn list_installations(&self) -> Result<Vec<Installation>, AuthError> {
+//!         // List all installations for this app
+//!         # todo!()
+//!     }
+//!
+//!     async fn get_installation_repositories(
+//!         &self,
+//!         installation_id: InstallationId,
+//!     ) -> Result<Vec<Repository>, AuthError> {
+//!         // Get repositories accessible to installation
+//!         # todo!()
+//!     }
+//! }
+//! ```
+//!
+//! ## Working with Permissions
+//!
+//! Installation tokens include permission information:
+//!
+//! ```
+//! use github_bot_sdk::auth::{InstallationPermissions, PermissionLevel};
+//!
+//! // Create permissions with struct fields (not HashMap)
+//! let mut permissions = InstallationPermissions {
+//!     issues: PermissionLevel::Write,
+//!     pull_requests: PermissionLevel::Write,
+//!     contents: PermissionLevel::Write,
+//!     metadata: PermissionLevel::Read,
+//!     checks: PermissionLevel::None,
+//!     actions: PermissionLevel::None,
+//! };
+//!
+//! // Check permissions via fields
+//! match permissions.contents {
+//!     PermissionLevel::Read => println!("Read-only access to contents"),
+//!     PermissionLevel::Write => println!("Read-write access to contents"),
+//!     PermissionLevel::Admin => println!("Admin access to contents"),
+//!     PermissionLevel::None => println!("No access to contents"),
+//! }
+//! ```
+//!
+//! ## Secret Management
+//!
+//! Implement [`SecretProvider`] to integrate with your secret management system:
+//!
+//! ```no_run
+//! use github_bot_sdk::auth::{SecretProvider, PrivateKey, GitHubAppId};
+//! use github_bot_sdk::error::SecretError;
+//! use chrono::Duration;
+//! use async_trait::async_trait;
+//!
+//! struct MySecretProvider {
+//!     // Your secret storage integration
+//! }
+//!
+//! #[async_trait]
+//! impl SecretProvider for MySecretProvider {
+//!     async fn get_private_key(&self) -> Result<PrivateKey, SecretError> {
+//!         // Retrieve private key from Azure Key Vault, AWS Secrets Manager,
+//!         // environment variables, or your preferred secret store
+//!         # todo!()
+//!     }
+//!
+//!     async fn get_app_id(&self) -> Result<GitHubAppId, SecretError> {
+//!         // Retrieve GitHub App ID
+//!         # todo!()
+//!     }
+//!
+//!     async fn get_webhook_secret(&self) -> Result<String, SecretError> {
+//!         // Retrieve webhook secret for signature validation
+//!         # todo!()
+//!     }
+//!
+//!     fn cache_duration(&self) -> Duration {
+//!         // How long to cache secrets (e.g., 1 hour)
+//!         Duration::hours(1)
+//!     }
+//! }
+//! ```
+//!
+//! # Security Considerations
+//!
+//! This module implements several security best practices:
+//!
+//! - **Memory Safety** - Token types implement `Drop` to zero memory
+//! - **No Logging** - Debug implementations redact sensitive values
+//! - **Type Safety** - Branded types prevent ID confusion at compile time
+//! - **Expiration Tracking** - Automatic token expiration detection
+//! - **Constant-Time Comparison** - Used where timing attacks are a concern
+//!
+//! # Error Handling
+//!
+//! Authentication operations can fail for various reasons:
+//!
+//! - [`AuthError::InvalidCredentials`] - Invalid private key or app ID
+//! - [`AuthError::TokenExpired`] - Token has expired and needs refresh
+//! - [`AuthError::InsufficientPermissions`] - Insufficient permissions for operation
+//! - [`AuthError::GitHubApiError`] - GitHub API errors including rate limiting
+//! - [`AuthError::NetworkError`] - Network connectivity issues
+//!
+//! All errors include context for debugging and support retry classification.
+//!
+//! # Architecture
+//!
+//! This module follows the ports and adapters (hexagonal) architecture:
+//!
+//! - **Domain Types** - ID types, token types, permission models (in this module)
+//! - **Port Interfaces** - Traits for external dependencies ([`SecretProvider`], [`TokenCache`], etc.)
+//! - **Adapters** - Your implementations for specific infrastructure (Azure, AWS, etc.)
+//!
+//! This design enables:
+//! - Testability through dependency injection
+//! - Flexibility to swap infrastructure components
+//! - Clear separation between domain logic and infrastructure
+//!
+//! # See Also
+//!
+//! - [`crate::client`] - GitHub API client using these authentication types
+//! - [`crate::webhook`] - Webhook signature validation using secrets from this module
+//! - [GitHub App Authentication Documentation](https://docs.github.com/en/developers/apps/building-github-apps/authenticating-with-github-apps)
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};

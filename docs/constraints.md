@@ -2,7 +2,7 @@
 
 **Purpose:** Quick reference for non-obvious constraints and decisions. Each item links to the full explanation (ADR/standard/catalog).
 
-Last updated: 2026-01-16
+Last updated: 2026-01-24
 
 ---
 

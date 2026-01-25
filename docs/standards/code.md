@@ -4,7 +4,7 @@
 
 ### Workspace Structure
 
-This is a Cargo workspace with a single crate.
+Currently organized as a Cargo workspace. See Cargo.toml for current crate structure.
 
 ### Module Structure
 

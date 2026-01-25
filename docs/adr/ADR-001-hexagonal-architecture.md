@@ -97,6 +97,6 @@ let client = QueueClientFactory::create(config).await?;
 
 ## References
 
-- [Architecture Spec](../spec/architecture.md)
-- [Responsibilities Spec](../spec/responsibilities.md)
+- [Architecture Spec](../../docs/spec/architecture.md)
+- [Responsibilities Spec](../../docs/spec/responsibilities.md)
 - Hexagonal Architecture: https://alistair.cockburn.us/hexagonal-architecture/

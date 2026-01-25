@@ -28,7 +28,7 @@ Before proposing changes, pull the relevant repo memory docs into context.
 
 Before implementing features, verify:
 
-1. **Read Specifications**: Check `docs/spec/` for relevant documentation
+1. **Read Specifications**: Check `docs/spec/` for relevant documentation (all specs are located in `docs/spec/`)
 2. Read `docs/constraints.md` (tripwires + hard rules)
 3. Read `docs/catalog.md` (what already exists to reuse)
 4. Read relevant standards in `docs/standards/` (language/domain specific)

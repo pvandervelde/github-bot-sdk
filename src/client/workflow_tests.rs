@@ -80,17 +80,46 @@ impl AuthenticationProvider for MockAuthProvider {
 }
 
 mod construction {
+    use super::*;
 
+    /// Verify TriggerWorkflowRequest constructs correctly with only ref.
+    ///
+    /// Tests that TriggerWorkflowRequest can be created with minimal required
+    /// fields (ref only, no inputs).
     #[test]
-    #[ignore = "TODO: Verify TriggerWorkflowRequest with only ref"]
     fn test_trigger_workflow_request_minimal() {
-        todo!("Verify TriggerWorkflowRequest with only ref")
+        let request = TriggerWorkflowRequest {
+            git_ref: "main".to_string(),
+            inputs: None,
+        };
+
+        assert_eq!(request.git_ref, "main");
+        assert!(request.inputs.is_none());
     }
 
+    /// Verify TriggerWorkflowRequest constructs correctly with inputs.
+    ///
+    /// Tests that TriggerWorkflowRequest can be created with inputs map
+    /// for passing parameters to the workflow.
     #[test]
-    #[ignore = "TODO: Verify TriggerWorkflowRequest with inputs map"]
     fn test_trigger_workflow_request_with_inputs() {
-        todo!("Verify TriggerWorkflowRequest with inputs map")
+        let mut inputs = std::collections::HashMap::new();
+        inputs.insert("environment".to_string(), "production".to_string());
+        inputs.insert("version".to_string(), "v1.2.3".to_string());
+
+        let request = TriggerWorkflowRequest {
+            git_ref: "release-branch".to_string(),
+            inputs: Some(inputs.clone()),
+        };
+
+        assert_eq!(request.git_ref, "release-branch");
+        assert!(request.inputs.is_some());
+        let request_inputs = request.inputs.unwrap();
+        assert_eq!(
+            request_inputs.get("environment"),
+            Some(&"production".to_string())
+        );
+        assert_eq!(request_inputs.get("version"), Some(&"v1.2.3".to_string()));
     }
 }
 

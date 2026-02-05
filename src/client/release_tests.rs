@@ -80,23 +80,99 @@ impl AuthenticationProvider for MockAuthProvider {
 }
 
 mod construction {
+    use super::*;
 
+    /// Verify CreateReleaseRequest with only required tag_name field.
+    ///
+    /// Tests minimal release creation request with just the tag name.
     #[test]
-    #[ignore = "TODO: Verify CreateReleaseRequest with only tag_name"]
     fn test_create_release_request_minimal() {
-        todo!("Verify CreateReleaseRequest with only tag_name")
+        let request = CreateReleaseRequest {
+            tag_name: "v1.0.0".to_string(),
+            target_commitish: None,
+            name: None,
+            body: None,
+            draft: None,
+            prerelease: None,
+        };
+
+        assert_eq!(request.tag_name, "v1.0.0");
+        assert!(request.target_commitish.is_none());
+        assert!(request.name.is_none());
+        assert!(request.body.is_none());
+        assert!(request.draft.is_none());
+        assert!(request.prerelease.is_none());
+
+        // Verify minimal JSON serialization
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(json["tag_name"], "v1.0.0");
+        // Optional fields should not be present when None
+        assert!(json.get("target_commitish").is_none());
+        assert!(json.get("name").is_none());
+        assert!(json.get("body").is_none());
     }
 
+    /// Verify CreateReleaseRequest with all fields populated.
+    ///
+    /// Tests release creation with all optional fields provided.
     #[test]
-    #[ignore = "TODO: Verify CreateReleaseRequest with all fields"]
     fn test_create_release_request_full() {
-        todo!("Verify CreateReleaseRequest with all fields")
+        let request = CreateReleaseRequest {
+            tag_name: "v2.0.0".to_string(),
+            target_commitish: Some("develop".to_string()),
+            name: Some("Version 2.0.0".to_string()),
+            body: Some("Full release notes".to_string()),
+            draft: Some(true),
+            prerelease: Some(false),
+        };
+
+        assert_eq!(request.tag_name, "v2.0.0");
+        assert_eq!(request.target_commitish, Some("develop".to_string()));
+        assert_eq!(request.name, Some("Version 2.0.0".to_string()));
+        assert_eq!(request.body, Some("Full release notes".to_string()));
+        assert_eq!(request.draft, Some(true));
+        assert_eq!(request.prerelease, Some(false));
+
+        // Verify complete JSON serialization
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(json["tag_name"], "v2.0.0");
+        assert_eq!(json["target_commitish"], "develop");
+        assert_eq!(json["name"], "Version 2.0.0");
+        assert_eq!(json["body"], "Full release notes");
+        assert_eq!(json["draft"], true);
+        assert_eq!(json["prerelease"], false);
     }
 
+    /// Verify UpdateReleaseRequest with selective field updates.
+    ///
+    /// Tests partial update capability with only some fields set.
     #[test]
-    #[ignore = "TODO: Verify UpdateReleaseRequest with selective updates"]
     fn test_update_release_request_partial() {
-        todo!("Verify UpdateReleaseRequest with selective updates")
+        let request = UpdateReleaseRequest {
+            tag_name: None,
+            target_commitish: None,
+            name: Some("Updated Release Name".to_string()),
+            body: Some("Updated body".to_string()),
+            draft: Some(false),
+            prerelease: None,
+        };
+
+        // Verify structure
+        assert!(request.tag_name.is_none());
+        assert!(request.target_commitish.is_none());
+        assert_eq!(request.name, Some("Updated Release Name".to_string()));
+        assert_eq!(request.body, Some("Updated body".to_string()));
+        assert_eq!(request.draft, Some(false));
+        assert!(request.prerelease.is_none());
+
+        // Verify selective serialization
+        let json = serde_json::to_value(&request).unwrap();
+        assert!(json.get("tag_name").is_none());
+        assert!(json.get("target_commitish").is_none());
+        assert_eq!(json["name"], "Updated Release Name");
+        assert_eq!(json["body"], "Updated body");
+        assert_eq!(json["draft"], false);
+        assert!(json.get("prerelease").is_none());
     }
 }
 
@@ -859,22 +935,138 @@ mod serialization {
 }
 
 mod error_handling {
+    use super::*;
 
+    /// Verify get_release returns NotFound error for 404 response.
+    ///
+    /// Tests that attempting to fetch a non-existent release returns
+    /// ApiError::NotFound.
     #[tokio::test]
-    #[ignore = "TODO: Mock: 404 response returns ApiError::NotFound"]
     async fn test_release_not_found() {
-        todo!("Mock: 404 response returns ApiError::NotFound")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/releases/999999"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found",
+                "documentation_url": "https://docs.github.com/rest/releases/releases#get-a-release"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let result = client.get_release("octocat", "Hello-World", 999999).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound));
     }
 
+    /// Verify create_release returns InvalidRequest for duplicate tag.
+    ///
+    /// Tests that attempting to create a release with an existing tag
+    /// returns ApiError::InvalidRequest with validation error.
     #[tokio::test]
-    #[ignore = "TODO: Mock: 422 validation error for duplicate tag"]
     async fn test_tag_already_exists() {
-        todo!("Mock: 422 validation error for duplicate tag")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path("/repos/octocat/Hello-World/releases"))
+            .respond_with(ResponseTemplate::new(422).set_body_json(serde_json::json!({
+                "message": "Validation Failed",
+                "errors": [
+                    {
+                        "resource": "Release",
+                        "code": "already_exists",
+                        "field": "tag_name"
+                    }
+                ],
+                "documentation_url": "https://docs.github.com/rest/releases/releases#create-a-release"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let request = CreateReleaseRequest {
+            tag_name: "v1.0.0".to_string(),
+            target_commitish: None,
+            name: None,
+            body: None,
+            draft: None,
+            prerelease: None,
+        };
+
+        let result = client
+            .create_release("octocat", "Hello-World", request)
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::InvalidRequest { message } => {
+                assert!(message.contains("Validation"));
+            }
+            _ => panic!("Expected InvalidRequest error"),
+        }
     }
 
+    /// Verify release operations return AuthorizationFailed for 403 response.
+    ///
+    /// Tests that attempting operations without proper permissions returns
+    /// ApiError::AuthorizationFailed.
     #[tokio::test]
-    #[ignore = "TODO: Mock: 403 response returns ApiError::Forbidden"]
     async fn test_forbidden_access() {
-        todo!("Mock: 403 response returns ApiError::Forbidden")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("DELETE"))
+            .and(path("/repos/private-org/private-repo/releases/1"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "message": "Resource not accessible by integration",
+                "documentation_url": "https://docs.github.com/rest/releases/releases#delete-a-release"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let result = client
+            .delete_release("private-org", "private-repo", 1)
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::AuthorizationFailed));
     }
 }

@@ -688,29 +688,173 @@ mod release_operations {
 }
 
 mod serialization {
+    use super::*;
 
+    /// Verify Release can be deserialized from GitHub API response.
+    ///
+    /// Tests that Release struct correctly deserializes from JSON matching
+    /// GitHub's release API response format.
     #[test]
-    #[ignore = "TODO: Verify Release can be deserialized from GitHub API response"]
     fn test_release_deserialize() {
-        todo!("Verify Release can be deserialized from GitHub API response")
+        let json = r#"{
+            "id": 1,
+            "node_id": "MDc6UmVsZWFzZTE=",
+            "tag_name": "v1.0.0",
+            "target_commitish": "main",
+            "name": "v1.0.0 Release",
+            "body": "Description of the release",
+            "draft": false,
+            "prerelease": false,
+            "author": {
+                "login": "octocat",
+                "id": 1,
+                "node_id": "MDQ6VXNlcjE=",
+                "type": "User"
+            },
+            "created_at": "2023-01-01T12:00:00Z",
+            "published_at": "2023-01-01T13:00:00Z",
+            "url": "https://api.github.com/repos/octocat/Hello-World/releases/1",
+            "html_url": "https://github.com/octocat/Hello-World/releases/tag/v1.0.0",
+            "assets": [
+                {
+                    "id": 1,
+                    "node_id": "MDEyOlJlbGVhc2VBc3NldDE=",
+                    "name": "example.zip",
+                    "label": "Example Asset",
+                    "content_type": "application/zip",
+                    "state": "uploaded",
+                    "size": 1024,
+                    "download_count": 42,
+                    "uploader": {
+                        "login": "octocat",
+                        "id": 1,
+                        "node_id": "MDQ6VXNlcjE=",
+                        "type": "User"
+                    },
+                    "created_at": "2023-01-01T12:30:00Z",
+                    "updated_at": "2023-01-01T12:30:00Z",
+                    "browser_download_url": "https://github.com/octocat/Hello-World/releases/download/v1.0.0/example.zip"
+                }
+            ]
+        }"#;
+
+        let release: Release = serde_json::from_str(json).unwrap();
+
+        assert_eq!(release.id, 1);
+        assert_eq!(release.node_id, "MDc6UmVsZWFzZTE=");
+        assert_eq!(release.tag_name, "v1.0.0");
+        assert_eq!(release.target_commitish, "main");
+        assert_eq!(release.name, Some("v1.0.0 Release".to_string()));
+        assert_eq!(release.body, Some("Description of the release".to_string()));
+        assert!(!release.draft);
+        assert!(!release.prerelease);
+        assert_eq!(release.author.login, "octocat");
+        assert_eq!(release.author.id, 1);
+        assert!(release.published_at.is_some());
+        assert_eq!(release.assets.len(), 1);
+        assert_eq!(
+            release.url,
+            "https://api.github.com/repos/octocat/Hello-World/releases/1"
+        );
+        assert_eq!(
+            release.html_url,
+            "https://github.com/octocat/Hello-World/releases/tag/v1.0.0"
+        );
     }
 
+    /// Verify ReleaseAsset can be deserialized.
+    ///
+    /// Tests that ReleaseAsset struct correctly deserializes from JSON.
     #[test]
-    #[ignore = "TODO: Verify ReleaseAsset can be deserialized"]
     fn test_release_asset_deserialize() {
-        todo!("Verify ReleaseAsset can be deserialized")
+        let json = r#"{
+            "id": 1,
+            "node_id": "MDEyOlJlbGVhc2VBc3NldDE=",
+            "name": "example.zip",
+            "label": "Example Asset",
+            "content_type": "application/zip",
+            "state": "uploaded",
+            "size": 2048,
+            "download_count": 100,
+            "uploader": {
+                "login": "octocat",
+                "id": 1,
+                "node_id": "MDQ6VXNlcjE=",
+                "type": "User"
+            },
+            "created_at": "2023-01-01T12:30:00Z",
+            "updated_at": "2023-01-01T12:35:00Z",
+            "browser_download_url": "https://github.com/octocat/Hello-World/releases/download/v1.0.0/example.zip"
+        }"#;
+
+        let asset: ReleaseAsset = serde_json::from_str(json).unwrap();
+
+        assert_eq!(asset.id, 1);
+        assert_eq!(asset.node_id, "MDEyOlJlbGVhc2VBc3NldDE=");
+        assert_eq!(asset.name, "example.zip");
+        assert_eq!(asset.label, Some("Example Asset".to_string()));
+        assert_eq!(asset.content_type, "application/zip");
+        assert_eq!(asset.state, "uploaded");
+        assert_eq!(asset.size, 2048);
+        assert_eq!(asset.download_count, 100);
+        assert_eq!(asset.uploader.login, "octocat");
+        assert_eq!(
+            asset.browser_download_url,
+            "https://github.com/octocat/Hello-World/releases/download/v1.0.0/example.zip"
+        );
     }
 
+    /// Verify CreateReleaseRequest serializes correctly.
+    ///
+    /// Tests that CreateReleaseRequest serializes to JSON with all fields
+    /// when provided.
     #[test]
-    #[ignore = "TODO: Verify CreateReleaseRequest serializes correctly"]
     fn test_create_release_request_serialize() {
-        todo!("Verify CreateReleaseRequest serializes correctly")
+        let request = CreateReleaseRequest {
+            tag_name: "v1.0.0".to_string(),
+            target_commitish: Some("main".to_string()),
+            name: Some("Version 1.0.0".to_string()),
+            body: Some("Release notes".to_string()),
+            draft: Some(false),
+            prerelease: Some(false),
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+
+        assert_eq!(json["tag_name"], "v1.0.0");
+        assert_eq!(json["target_commitish"], "main");
+        assert_eq!(json["name"], "Version 1.0.0");
+        assert_eq!(json["body"], "Release notes");
+        assert_eq!(json["draft"], false);
+        assert_eq!(json["prerelease"], false);
     }
 
+    /// Verify UpdateReleaseRequest skips None fields.
+    ///
+    /// Tests that UpdateReleaseRequest only serializes fields that are Some,
+    /// allowing partial updates without overwriting fields.
     #[test]
-    #[ignore = "TODO: Verify UpdateReleaseRequest skips None fields"]
     fn test_update_release_request_serialize_partial() {
-        todo!("Verify UpdateReleaseRequest skips None fields")
+        let request = UpdateReleaseRequest {
+            tag_name: Some("v1.0.1".to_string()),
+            name: Some("Updated name".to_string()),
+            body: None,
+            target_commitish: None,
+            draft: None,
+            prerelease: None,
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+
+        // Present fields
+        assert_eq!(json["tag_name"], "v1.0.1");
+        assert_eq!(json["name"], "Updated name");
+
+        // None fields should not be present in JSON
+        assert!(json.get("body").is_none());
+        assert!(json.get("target_commitish").is_none());
+        assert!(json.get("draft").is_none());
+        assert!(json.get("prerelease").is_none());
     }
 }
 

@@ -327,29 +327,102 @@ mod retry_policy {
 }
 
 mod serialization {
+    use super::*;
 
+    /// Verify RateLimitInfo can be serialized.
+    ///
+    /// Tests that RateLimitInfo serializes to JSON with all fields.
     #[test]
-    #[ignore = "TODO: Verify RateLimitInfo can be serialized"]
     fn test_rate_limit_info_serialize() {
-        todo!("Verify RateLimitInfo can be serialized")
+        let reset_time = DateTime::parse_from_rfc3339("2024-01-01T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let info = RateLimitInfo {
+            limit: 5000,
+            remaining: 4999,
+            reset_at: reset_time,
+            is_limited: false,
+        };
+
+        let json = serde_json::to_value(&info).unwrap();
+
+        assert_eq!(json["limit"], 5000);
+        assert_eq!(json["remaining"], 4999);
+        assert_eq!(json["is_limited"], false);
+        assert!(json.get("reset_at").is_some());
     }
 
+    /// Verify RateLimitInfo can be deserialized.
+    ///
+    /// Tests that RateLimitInfo correctly deserializes from JSON.
     #[test]
-    #[ignore = "TODO: Verify RateLimitInfo can be deserialized"]
     fn test_rate_limit_info_deserialize() {
-        todo!("Verify RateLimitInfo can be deserialized")
+        let json = r#"{
+            "limit": 5000,
+            "remaining": 4999,
+            "reset_at": "2024-01-01T12:00:00Z",
+            "is_limited": false
+        }"#;
+
+        let info: RateLimitInfo = serde_json::from_str(json).unwrap();
+
+        assert_eq!(info.limit, 5000);
+        assert_eq!(info.remaining, 4999);
+        assert!(!info.is_limited);
+        assert_eq!(
+            info.reset_at,
+            DateTime::parse_from_rfc3339("2024-01-01T12:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
     }
 
+    /// Verify RetryPolicy can be serialized.
+    ///
+    /// Tests that RetryPolicy serializes to JSON with all fields,
+    /// including Duration types.
     #[test]
-    #[ignore = "TODO: Verify RetryPolicy can be serialized"]
     fn test_retry_policy_serialize() {
-        todo!("Verify RetryPolicy can be serialized")
+        let policy = RetryPolicy {
+            max_retries: 5,
+            initial_delay: Duration::from_secs(2),
+            max_delay: Duration::from_secs(60),
+            backoff_multiplier: 2.0,
+            use_jitter: true,
+        };
+
+        let json = serde_json::to_value(&policy).unwrap();
+
+        assert_eq!(json["max_retries"], 5);
+        assert_eq!(json["backoff_multiplier"], 2.0);
+        assert_eq!(json["use_jitter"], true);
+        // Duration serializes as an object with secs and nanos
+        assert!(json.get("initial_delay").is_some());
+        assert!(json.get("max_delay").is_some());
     }
 
+    /// Verify RetryPolicy can be deserialized.
+    ///
+    /// Tests that RetryPolicy correctly deserializes from JSON,
+    /// including Duration types.
     #[test]
-    #[ignore = "TODO: Verify RetryPolicy can be deserialized"]
     fn test_retry_policy_deserialize() {
-        todo!("Verify RetryPolicy can be deserialized")
+        let json = r#"{
+            "max_retries": 5,
+            "initial_delay": {"secs": 2, "nanos": 0},
+            "max_delay": {"secs": 60, "nanos": 0},
+            "backoff_multiplier": 2.0,
+            "use_jitter": true
+        }"#;
+
+        let policy: RetryPolicy = serde_json::from_str(json).unwrap();
+
+        assert_eq!(policy.max_retries, 5);
+        assert_eq!(policy.initial_delay, Duration::from_secs(2));
+        assert_eq!(policy.max_delay, Duration::from_secs(60));
+        assert_eq!(policy.backoff_multiplier, 2.0);
+        assert!(policy.use_jitter);
     }
 }
 

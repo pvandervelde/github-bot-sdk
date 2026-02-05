@@ -673,22 +673,140 @@ mod serialization {
 }
 
 mod error_handling {
+    use super::*;
 
+    /// Verify get_workflow returns NotFound error for 404 response.
+    ///
+    /// Tests that attempting to fetch a non-existent workflow returns
+    /// ApiError::NotFound.
     #[tokio::test]
-    #[ignore = "TODO: Mock: 404 response returns ApiError::NotFound"]
     async fn test_workflow_not_found() {
-        todo!("Mock: 404 response returns ApiError::NotFound")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/actions/workflows/999999"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found",
+                "documentation_url": "https://docs.github.com/rest/actions/workflows#get-a-workflow"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let result = client.get_workflow("octocat", "Hello-World", 999999).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound));
     }
 
+    /// Verify workflow operations return AuthorizationFailed for 403 response.
+    ///
+    /// Tests that attempting operations without proper permissions returns
+    /// ApiError::AuthorizationFailed.
     #[tokio::test]
-    #[ignore = "TODO: Mock: 403 response returns ApiError::Forbidden"]
     async fn test_forbidden_access() {
-        todo!("Mock: 403 response returns ApiError::Forbidden")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path(
+                "/repos/private-org/private-repo/actions/workflows/123/dispatches",
+            ))
+            .respond_with(
+                ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                    "message": "Resource not accessible by integration",
+                    "documentation_url": "https://docs.github.com/rest/actions/workflows#create-a-workflow-dispatch-event"
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let request = TriggerWorkflowRequest {
+            git_ref: "main".to_string(),
+            inputs: None,
+        };
+
+        let result = client
+            .trigger_workflow("private-org", "private-repo", 123, request)
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::AuthorizationFailed));
     }
 
+    /// Verify trigger_workflow returns InvalidRequest when workflow is disabled.
+    ///
+    /// Tests that attempting to trigger a disabled workflow returns
+    /// ApiError::InvalidRequest with appropriate error message.
     #[tokio::test]
-    #[ignore = "TODO: Mock: Error when workflow is disabled"]
     async fn test_workflow_disabled() {
-        todo!("Mock: Error when workflow is disabled")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path(
+                "/repos/octocat/Hello-World/actions/workflows/123/dispatches",
+            ))
+            .respond_with(
+                ResponseTemplate::new(422).set_body_json(serde_json::json!({
+                    "message": "Workflow is disabled",
+                    "documentation_url": "https://docs.github.com/rest/actions/workflows#create-a-workflow-dispatch-event"
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let request = TriggerWorkflowRequest {
+            git_ref: "main".to_string(),
+            inputs: None,
+        };
+
+        let result = client
+            .trigger_workflow("octocat", "Hello-World", 123, request)
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::InvalidRequest { message } => {
+                assert!(message.contains("Workflow is disabled"));
+            }
+            _ => panic!("Expected InvalidRequest error"),
+        }
     }
 }

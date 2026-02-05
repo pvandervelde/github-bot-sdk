@@ -3,59 +3,125 @@
 use super::*;
 
 mod rate_limit_info {
+    use super::*;
+    use chrono::{DateTime, Duration as ChronoDuration, Utc};
 
+    /// Verify RateLimitInfo::from_headers with valid headers.
     #[test]
-    #[ignore = "TODO: Verify RateLimitInfo::from_headers with valid headers"]
     fn test_from_headers_valid() {
-        todo!("Verify RateLimitInfo::from_headers with valid headers")
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("4999"), Some("1640000000"));
+
+        assert!(info.is_some());
+        let info = info.unwrap();
+        assert_eq!(info.limit, 5000);
+        assert_eq!(info.remaining, 4999);
+        assert_eq!(
+            info.reset_at,
+            DateTime::from_timestamp(1640000000, 0).unwrap()
+        );
+        assert!(!info.is_limited);
     }
 
+    /// Verify from_headers returns None when limit header missing.
     #[test]
-    #[ignore = "TODO: Verify from_headers returns None when headers missing"]
     fn test_from_headers_missing() {
-        todo!("Verify from_headers returns None when headers missing")
+        let info = RateLimitInfo::from_headers(None, Some("4999"), Some("1640000000"));
+        assert!(info.is_none());
+
+        let info = RateLimitInfo::from_headers(Some("5000"), None, Some("1640000000"));
+        assert!(info.is_none());
+
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("4999"), None);
+        assert!(info.is_none());
     }
 
+    /// Verify from_headers returns None when headers have invalid values.
     #[test]
-    #[ignore = "TODO: Verify from_headers returns None when headers invalid"]
     fn test_from_headers_invalid() {
-        todo!("Verify from_headers returns None when headers invalid")
+        // Invalid limit
+        let info = RateLimitInfo::from_headers(Some("invalid"), Some("4999"), Some("1640000000"));
+        assert!(info.is_none());
+
+        // Invalid remaining
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("invalid"), Some("1640000000"));
+        assert!(info.is_none());
+
+        // Invalid reset timestamp
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("4999"), Some("invalid"));
+        assert!(info.is_none());
     }
 
+    /// Verify is_limited is true when remaining=0.
     #[test]
-    #[ignore = "TODO: Verify is_limited is true when remaining=0"]
     fn test_is_limited() {
-        todo!("Verify is_limited is true when remaining=0")
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("0"), Some("1640000000"));
+
+        assert!(info.is_some());
+        let info = info.unwrap();
+        assert_eq!(info.remaining, 0);
+        assert!(info.is_limited);
     }
 
+    /// Verify is_limited is false when remaining>0.
     #[test]
-    #[ignore = "TODO: Verify is_limited is false when remaining>0"]
     fn test_is_not_limited() {
-        todo!("Verify is_limited is false when remaining>0")
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("100"), Some("1640000000"));
+
+        assert!(info.is_some());
+        let info = info.unwrap();
+        assert_eq!(info.remaining, 100);
+        assert!(!info.is_limited);
     }
 
+    /// Verify is_near_limit when below threshold.
     #[test]
-    #[ignore = "TODO: Verify is_near_limit when below threshold"]
     fn test_is_near_limit_true() {
-        todo!("Verify is_near_limit when below threshold")
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("100"), Some("1640000000"))
+            .expect("Valid headers");
+
+        // 100/5000 = 2%, which is below 10% threshold
+        assert!(info.is_near_limit(0.10));
+
+        // Also test with 5% threshold
+        assert!(info.is_near_limit(0.05));
     }
 
+    /// Verify is_near_limit when above threshold.
     #[test]
-    #[ignore = "TODO: Verify is_near_limit when above threshold"]
     fn test_is_near_limit_false() {
-        todo!("Verify is_near_limit when above threshold")
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("3000"), Some("1640000000"))
+            .expect("Valid headers");
+
+        // 3000/5000 = 60%, which is above 10% threshold
+        assert!(!info.is_near_limit(0.10));
     }
 
+    /// Verify time_until_reset when reset is in future.
     #[test]
-    #[ignore = "TODO: Verify time_until_reset when reset is in future"]
     fn test_time_until_reset_future() {
-        todo!("Verify time_until_reset when reset is in future")
+        let future_timestamp = (Utc::now() + ChronoDuration::try_hours(1).unwrap()).timestamp();
+        let info = RateLimitInfo::from_headers(
+            Some("5000"),
+            Some("100"),
+            Some(&future_timestamp.to_string()),
+        )
+        .expect("Valid headers");
+
+        let duration = info.time_until_reset();
+        // Should be approximately 1 hour (allow some tolerance for test execution time)
+        assert!(duration.as_secs() >= 3590);
+        assert!(duration.as_secs() <= 3610);
     }
 
+    /// Verify time_until_reset returns 0 when reset is in past.
     #[test]
-    #[ignore = "TODO: Verify time_until_reset returns 0 when reset is in past"]
     fn test_time_until_reset_past() {
-        todo!("Verify time_until_reset returns 0 when reset is in past")
+        // Use a timestamp from 2021
+        let info = RateLimitInfo::from_headers(Some("5000"), Some("100"), Some("1640000000"))
+            .expect("Valid headers");
+
+        let duration = info.time_until_reset();
+        assert_eq!(duration.as_secs(), 0);
     }
 }
 

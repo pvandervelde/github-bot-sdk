@@ -1,11 +1,29 @@
 //! Tests for project operations.
 
 mod construction {
+    use super::super::*;
 
+    /// Verify AddProjectV2ItemRequest structure with content node ID.
+    ///
+    /// Tests that AddProjectV2ItemRequest can be constructed with a valid
+    /// content node ID (issue or pull request node ID).
     #[test]
-    #[ignore = "TODO: Verify AddProjectV2ItemRequest with node ID"]
     fn test_add_project_item_request() {
-        todo!("Verify AddProjectV2ItemRequest with node ID")
+        // Arrange: Create request with issue node ID
+        let content_node_id = "MDU6SXNzdWUx".to_string();
+
+        // Act: Create the request
+        let request = AddProjectV2ItemRequest {
+            content_node_id: content_node_id.clone(),
+        };
+
+        // Assert: Verify structure
+        assert_eq!(request.content_node_id, content_node_id);
+
+        // Verify serialization
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("content_node_id"));
+        assert!(json.contains("MDU6SXNzdWUx"));
     }
 }
 
@@ -67,11 +85,50 @@ mod project_operations {
 }
 
 mod serialization {
+    use super::super::*;
 
+    /// Verify ProjectV2 can be deserialized from GitHub API response.
+    ///
+    /// Tests that ProjectV2 correctly deserializes from JSON matching
+    /// GitHub's Projects v2 API response format.
     #[test]
-    #[ignore = "TODO: Verify ProjectV2 can be deserialized from GitHub API response"]
     fn test_project_v2_deserialize() {
-        todo!("Verify ProjectV2 can be deserialized from GitHub API response")
+        // Arrange: GitHub Projects v2 API response JSON
+        let json = r#"{
+            "id": 12345,
+            "node_id": "PVT_kwDOAE1L0M4AA1qJ",
+            "number": 1,
+            "title": "My Project",
+            "description": "Project description",
+            "owner": {
+                "login": "octocat",
+                "type": "Organization",
+                "id": 1,
+                "node_id": "MDEyOk9yZ2FuaXphdGlvbjE="
+            },
+            "public": true,
+            "created_at": "2022-04-28T16:30:00Z",
+            "updated_at": "2022-04-28T16:30:00Z",
+            "url": "https://github.com/orgs/octocat/projects/1"
+        }"#;
+
+        // Act: Deserialize
+        let project: ProjectV2 = serde_json::from_str(json).unwrap();
+
+        // Assert: Verify all fields
+        assert_eq!(project.id, 12345);
+        assert_eq!(project.node_id, "PVT_kwDOAE1L0M4AA1qJ");
+        assert_eq!(project.number, 1);
+        assert_eq!(project.title, "My Project");
+        assert_eq!(project.description, Some("Project description".to_string()));
+        assert_eq!(project.owner.login, "octocat");
+        assert_eq!(project.owner.owner_type, "Organization");
+        assert_eq!(project.owner.id, 1);
+        assert_eq!(project.owner.node_id, "MDEyOk9yZ2FuaXphdGlvbjE=");
+        assert!(project.public);
+        assert_eq!(project.url, "https://github.com/orgs/octocat/projects/1");
+        assert!(project.created_at.to_rfc3339().starts_with("2022-04-28"));
+        assert!(project.updated_at.to_rfc3339().starts_with("2022-04-28"));
     }
 
     #[test]

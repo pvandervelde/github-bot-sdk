@@ -543,29 +543,132 @@ mod workflow_run_operations {
 }
 
 mod serialization {
+    use super::*;
 
+    /// Verify Workflow can be deserialized from GitHub API response.
+    ///
+    /// Tests that Workflow struct correctly deserializes from JSON matching
+    /// GitHub's workflow API response format.
     #[test]
-    #[ignore = "TODO: Verify Workflow can be deserialized from GitHub API response"]
     fn test_workflow_deserialize() {
-        todo!("Verify Workflow can be deserialized from GitHub API response")
+        let json = r#"{
+            "id": 161335,
+            "node_id": "MDg6V29ya2Zsb3cxNjEzMzU=",
+            "name": "CI",
+            "path": ".github/workflows/ci.yml",
+            "state": "active",
+            "created_at": "2020-01-08T23:48:37.000Z",
+            "updated_at": "2020-01-08T23:50:21.000Z",
+            "url": "https://api.github.com/repos/octocat/Hello-World/actions/workflows/161335",
+            "html_url": "https://github.com/octocat/Hello-World/blob/master/.github/workflows/ci.yml",
+            "badge_url": "https://github.com/octocat/Hello-World/workflows/CI/badge.svg"
+        }"#;
+
+        let workflow: Workflow = serde_json::from_str(json).unwrap();
+
+        assert_eq!(workflow.id, 161335);
+        assert_eq!(workflow.node_id, "MDg6V29ya2Zsb3cxNjEzMzU=");
+        assert_eq!(workflow.name, "CI");
+        assert_eq!(workflow.path, ".github/workflows/ci.yml");
+        assert_eq!(workflow.state, "active");
+        assert_eq!(
+            workflow.url,
+            "https://api.github.com/repos/octocat/Hello-World/actions/workflows/161335"
+        );
+        assert_eq!(
+            workflow.html_url,
+            "https://github.com/octocat/Hello-World/blob/master/.github/workflows/ci.yml"
+        );
+        assert_eq!(
+            workflow.badge_url,
+            "https://github.com/octocat/Hello-World/workflows/CI/badge.svg"
+        );
     }
 
+    /// Verify WorkflowRun can be deserialized from GitHub API response.
+    ///
+    /// Tests that WorkflowRun struct correctly deserializes from JSON matching
+    /// GitHub's workflow run API response format.
     #[test]
-    #[ignore = "TODO: Verify WorkflowRun can be deserialized from GitHub API response"]
     fn test_workflow_run_deserialize() {
-        todo!("Verify WorkflowRun can be deserialized from GitHub API response")
+        let json = r#"{
+            "id": 30433642,
+            "node_id": "MDEyOldvcmtmbG93IFJ1bjI2OTI4OQ==",
+            "name": "Build",
+            "run_number": 42,
+            "event": "push",
+            "status": "completed",
+            "conclusion": "success",
+            "workflow_id": 159038,
+            "head_branch": "master",
+            "head_sha": "acb5820ced9479c074f688cc328bf03f341a511d",
+            "created_at": "2020-01-22T19:33:08Z",
+            "updated_at": "2020-01-22T19:33:08Z",
+            "url": "https://api.github.com/repos/octocat/Hello-World/actions/runs/30433642",
+            "html_url": "https://github.com/octocat/Hello-World/actions/runs/30433642"
+        }"#;
+
+        let run: WorkflowRun = serde_json::from_str(json).unwrap();
+
+        assert_eq!(run.id, 30433642);
+        assert_eq!(run.node_id, "MDEyOldvcmtmbG93IFJ1bjI2OTI4OQ==");
+        assert_eq!(run.name, "Build");
+        assert_eq!(run.run_number, 42);
+        assert_eq!(run.event, "push");
+        assert_eq!(run.status, "completed");
+        assert_eq!(run.conclusion, Some("success".to_string()));
+        assert_eq!(run.workflow_id, 159038);
+        assert_eq!(run.head_branch, "master");
+        assert_eq!(run.head_sha, "acb5820ced9479c074f688cc328bf03f341a511d");
+        assert_eq!(
+            run.url,
+            "https://api.github.com/repos/octocat/Hello-World/actions/runs/30433642"
+        );
+        assert_eq!(
+            run.html_url,
+            "https://github.com/octocat/Hello-World/actions/runs/30433642"
+        );
     }
 
+    /// Verify TriggerWorkflowRequest serializes correctly.
+    ///
+    /// Tests that TriggerWorkflowRequest serializes to JSON with ref field
+    /// when inputs are not provided.
     #[test]
-    #[ignore = "TODO: Verify TriggerWorkflowRequest serializes correctly"]
     fn test_trigger_workflow_request_serialize() {
-        todo!("Verify TriggerWorkflowRequest serializes correctly")
+        let request = TriggerWorkflowRequest {
+            git_ref: "main".to_string(),
+            inputs: None,
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+
+        assert_eq!(json["ref"], "main");
+        // Verify inputs field is not present when None
+        assert!(json.get("inputs").is_none());
     }
 
+    /// Verify TriggerWorkflowRequest serializes correctly with inputs.
+    ///
+    /// Tests that TriggerWorkflowRequest serializes to JSON including
+    /// inputs when provided.
     #[test]
-    #[ignore = "TODO: Verify inputs are included in serialization"]
     fn test_trigger_workflow_request_serialize_with_inputs() {
-        todo!("Verify inputs are included in serialization")
+        let mut inputs = std::collections::HashMap::new();
+        inputs.insert("name".to_string(), "Mona the Octocat".to_string());
+        inputs.insert("home".to_string(), "San Francisco, CA".to_string());
+
+        let request = TriggerWorkflowRequest {
+            git_ref: "main".to_string(),
+            inputs: Some(inputs),
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+
+        assert_eq!(json["ref"], "main");
+        assert!(json["inputs"].is_object());
+        assert_eq!(json["inputs"]["name"], "Mona the Octocat");
+        assert_eq!(json["inputs"]["home"], "San Francisco, CA");
     }
 }
 

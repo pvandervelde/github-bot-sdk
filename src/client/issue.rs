@@ -1,4 +1,4 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/issue-operations.md
+// GENERATED FROM: docs/spec/interfaces/issue-operations.md
 // Issue, label, and comment operations for GitHub API
 
 use chrono::{DateTime, Utc};
@@ -11,7 +11,7 @@ use crate::error::ApiError;
 ///
 /// Represents a GitHub issue with all its metadata.
 ///
-/// See github-bot-sdk-specs/interfaces/issue-operations.md
+/// See docs/spec/interfaces/issue-operations.md
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Issue {
     /// Unique issue identifier
@@ -493,7 +493,7 @@ impl InstallationClient {
 
     /// List all labels in a repository.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn list_labels(&self, owner: &str, repo: &str) -> Result<Vec<Label>, ApiError> {
         let path = format!("/repos/{}/{}/labels", owner, repo);
         let response = self.get(&path).await?;
@@ -521,7 +521,7 @@ impl InstallationClient {
 
     /// Get a specific label by name.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn get_label(&self, owner: &str, repo: &str, name: &str) -> Result<Label, ApiError> {
         let path = format!("/repos/{}/{}/labels/{}", owner, repo, name);
         let response = self.get(&path).await?;
@@ -549,7 +549,7 @@ impl InstallationClient {
 
     /// Create a new label.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn create_label(
         &self,
         owner: &str,
@@ -589,7 +589,7 @@ impl InstallationClient {
 
     /// Update an existing label.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn update_label(
         &self,
         owner: &str,
@@ -630,7 +630,7 @@ impl InstallationClient {
 
     /// Delete a label.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn delete_label(&self, owner: &str, repo: &str, name: &str) -> Result<(), ApiError> {
         let path = format!("/repos/{}/{}/labels/{}", owner, repo, name);
         let response = self.delete(&path).await?;
@@ -658,7 +658,7 @@ impl InstallationClient {
 
     /// Add labels to an issue.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn add_labels_to_issue(
         &self,
         owner: &str,
@@ -699,7 +699,7 @@ impl InstallationClient {
 
     /// Remove a label from an issue.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn remove_label_from_issue(
         &self,
         owner: &str,
@@ -740,7 +740,7 @@ impl InstallationClient {
 
     /// List comments on an issue.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn list_issue_comments(
         &self,
         owner: &str,
@@ -773,7 +773,7 @@ impl InstallationClient {
 
     /// Get a specific comment by ID.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn get_issue_comment(
         &self,
         owner: &str,
@@ -806,7 +806,7 @@ impl InstallationClient {
 
     /// Create a comment on an issue.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn create_issue_comment(
         &self,
         owner: &str,
@@ -847,7 +847,7 @@ impl InstallationClient {
 
     /// Update an existing comment.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn update_issue_comment(
         &self,
         owner: &str,
@@ -888,7 +888,7 @@ impl InstallationClient {
 
     /// Delete a comment.
     ///
-    /// See github-bot-sdk-specs/interfaces/issue-operations.md
+    /// See docs/spec/interfaces/issue-operations.md
     pub async fn delete_issue_comment(
         &self,
         owner: &str,

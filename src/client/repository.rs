@@ -1,6 +1,6 @@
 //! Repository Operations
 //!
-//! **Specification**: `github-bot-sdk-specs/interfaces/repository-operations.md`
+//! **Specification**: `docs/spec/interfaces/repository-operations.md`
 
 use crate::{client::InstallationClient, error::ApiError};
 use chrono::{DateTime, Utc};

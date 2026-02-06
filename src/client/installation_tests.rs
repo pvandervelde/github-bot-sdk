@@ -1,6 +1,6 @@
 //! Tests for Installation Client
 //!
-//! **Specification**: `github-bot-sdk-specs/interfaces/installation-client.md`
+//! **Specification**: `docs/spec/interfaces/installation-client.md`
 
 use super::*;
 use crate::auth::InstallationId;

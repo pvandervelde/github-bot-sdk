@@ -1,4 +1,4 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/pull-request-operations.md
+// GENERATED FROM: docs/spec/interfaces/pull-request-operations.md
 // Pull request and review operations for GitHub API
 
 use chrono::{DateTime, Utc};
@@ -12,7 +12,7 @@ use crate::error::ApiError;
 ///
 /// Represents a pull request with all its metadata.
 ///
-/// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+/// See docs/spec/interfaces/pull-request-operations.md
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PullRequest {
     /// Unique pull request identifier
@@ -333,7 +333,7 @@ impl InstallationClient {
     /// # }
     /// ```
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn list_pull_requests(
         &self,
         owner: &str,
@@ -396,7 +396,7 @@ impl InstallationClient {
 
     /// Get a specific pull request by number.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn get_pull_request(
         &self,
         owner: &str,
@@ -429,7 +429,7 @@ impl InstallationClient {
 
     /// Create a new pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn create_pull_request(
         &self,
         owner: &str,
@@ -469,7 +469,7 @@ impl InstallationClient {
 
     /// Update an existing pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn update_pull_request(
         &self,
         owner: &str,
@@ -510,7 +510,7 @@ impl InstallationClient {
 
     /// Merge a pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn merge_pull_request(
         &self,
         owner: &str,
@@ -564,7 +564,7 @@ impl InstallationClient {
 
     /// Set the milestone on a pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn set_pull_request_milestone(
         &self,
         owner: &str,
@@ -586,7 +586,7 @@ impl InstallationClient {
 
     /// List reviews on a pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn list_reviews(
         &self,
         owner: &str,
@@ -619,7 +619,7 @@ impl InstallationClient {
 
     /// Get a specific review by ID.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn get_review(
         &self,
         owner: &str,
@@ -656,7 +656,7 @@ impl InstallationClient {
 
     /// Create a review on a pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn create_review(
         &self,
         owner: &str,
@@ -697,7 +697,7 @@ impl InstallationClient {
 
     /// Update a pending review.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn update_review(
         &self,
         owner: &str,
@@ -742,7 +742,7 @@ impl InstallationClient {
 
     /// Dismiss a review.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn dismiss_review(
         &self,
         owner: &str,
@@ -791,7 +791,7 @@ impl InstallationClient {
 
     /// List comments on a pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn list_pull_request_comments(
         &self,
         owner: &str,
@@ -824,7 +824,7 @@ impl InstallationClient {
 
     /// Create a comment on a pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn create_pull_request_comment(
         &self,
         owner: &str,
@@ -869,7 +869,7 @@ impl InstallationClient {
 
     /// Add labels to a pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn add_labels_to_pull_request(
         &self,
         owner: &str,
@@ -911,7 +911,7 @@ impl InstallationClient {
 
     /// Remove a label from a pull request.
     ///
-    /// See github-bot-sdk-specs/interfaces/pull-request-operations.md
+    /// See docs/spec/interfaces/pull-request-operations.md
     pub async fn remove_label_from_pull_request(
         &self,
         owner: &str,

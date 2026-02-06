@@ -1,4 +1,4 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/rate-limiting-retry.md
+// GENERATED FROM: docs/spec/interfaces/rate-limiting-retry.md
 // Rate limiting and retry policy for GitHub API
 
 use chrono::{DateTime, Utc};
@@ -12,7 +12,7 @@ use std::time::Duration;
 /// - X-RateLimit-Remaining
 /// - X-RateLimit-Reset (Unix timestamp)
 ///
-/// See github-bot-sdk-specs/interfaces/rate-limiting-retry.md
+/// See docs/spec/interfaces/rate-limiting-retry.md
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimitInfo {
     /// Maximum number of requests allowed
@@ -31,7 +31,7 @@ pub struct RateLimitInfo {
 impl RateLimitInfo {
     /// Create rate limit info from response headers.
     ///
-    /// See github-bot-sdk-specs/interfaces/rate-limiting-retry.md
+    /// See docs/spec/interfaces/rate-limiting-retry.md
     pub fn from_headers(
         limit: Option<&str>,
         remaining: Option<&str>,
@@ -75,7 +75,7 @@ impl RateLimitInfo {
 ///
 /// Controls exponential backoff retry behavior.
 ///
-/// See github-bot-sdk-specs/interfaces/rate-limiting-retry.md
+/// See docs/spec/interfaces/rate-limiting-retry.md
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryPolicy {
     /// Maximum number of retry attempts
@@ -170,7 +170,7 @@ impl RetryPolicy {
     /// // First retry: ~100ms ±25%
     /// ```
     ///
-    /// See github-bot-sdk-specs/interfaces/rate-limiting-retry.md
+    /// See docs/spec/interfaces/rate-limiting-retry.md
     pub fn calculate_delay(&self, attempt: u32) -> Duration {
         if attempt == 0 {
             return Duration::from_secs(0);
@@ -240,7 +240,7 @@ impl RetryPolicy {
 /// assert_eq!(delay, None);
 /// ```
 ///
-/// See github-bot-sdk-specs/interfaces/rate-limiting-retry.md
+/// See docs/spec/interfaces/rate-limiting-retry.md
 pub fn parse_retry_after(retry_after: &str) -> Option<Duration> {
     // Try parsing as delta-seconds first (most common for GitHub)
     if let Ok(seconds) = retry_after.parse::<u64>() {
@@ -300,7 +300,7 @@ pub fn parse_retry_after(retry_after: &str) -> Option<Duration> {
 /// assert_eq!(delay, Duration::from_secs(60));
 /// ```
 ///
-/// See github-bot-sdk-specs/interfaces/rate-limiting-retry.md
+/// See docs/spec/interfaces/rate-limiting-retry.md
 pub fn calculate_rate_limit_delay(
     retry_after: Option<&str>,
     rate_limit_reset: Option<&str>,
@@ -377,7 +377,7 @@ pub fn calculate_rate_limit_delay(
 /// assert!(!is_secondary);
 /// ```
 ///
-/// See github-bot-sdk-specs/interfaces/rate-limiting-retry.md
+/// See docs/spec/interfaces/rate-limiting-retry.md
 pub fn detect_secondary_rate_limit(status: u16, body: &str) -> bool {
     if status != 403 {
         return false;

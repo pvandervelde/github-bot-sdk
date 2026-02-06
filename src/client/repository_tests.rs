@@ -1,6 +1,6 @@
 //! Tests for Repository Operations
 //!
-//! **Specification**: `github-bot-sdk-specs/interfaces/repository-operations.md`
+//! **Specification**: `docs/spec/interfaces/repository-operations.md`
 
 use super::*;
 use crate::auth::InstallationId;

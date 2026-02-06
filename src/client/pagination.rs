@@ -1,4 +1,4 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/pagination.md
+// GENERATED FROM: docs/spec/interfaces/pagination.md
 // Pagination support for GitHub API
 
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// GitHub API returns paginated results with Link headers for navigation.
 ///
-/// See github-bot-sdk-specs/interfaces/pagination.md
+/// See docs/spec/interfaces/pagination.md
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PagedResponse<T> {
     /// Items in this page
@@ -126,7 +126,7 @@ impl<T> PagedResponse<T> {
 /// GitHub returns Link headers like:
 /// `<https://api.github.com/resource?page=2>; rel="next", <https://api.github.com/resource?page=5>; rel="last"`
 ///
-/// See github-bot-sdk-specs/interfaces/pagination.md
+/// See docs/spec/interfaces/pagination.md
 pub fn parse_link_header(link_header: Option<&str>) -> Pagination {
     let mut pagination = Pagination::default();
 

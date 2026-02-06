@@ -120,7 +120,7 @@ mod pull_request_operations {
 
     /// Verify list_pull_requests returns PRs from GitHub API.
     ///
-    /// Tests: github-bot-sdk-specs/assertions.md #10
+    /// Tests: docs/spec/assertions.md #10
     #[tokio::test]
     async fn test_list_pull_requests() {
         let mock_server = MockServer::start().await;
@@ -202,7 +202,7 @@ mod pull_request_operations {
 
     /// Verify get_pull_request returns single PR from GitHub API.
     ///
-    /// Tests: github-bot-sdk-specs/assertions.md #10
+    /// Tests: docs/spec/assertions.md #10
     #[tokio::test]
     async fn test_get_pull_request() {
         let mock_server = MockServer::start().await;
@@ -303,7 +303,7 @@ mod pull_request_operations {
 
     /// Verify create_pull_request creates new PR via GitHub API.
     ///
-    /// Tests: github-bot-sdk-specs/assertions.md #10
+    /// Tests: docs/spec/assertions.md #10
     #[tokio::test]
     async fn test_create_pull_request() {
         let mock_server = MockServer::start().await;

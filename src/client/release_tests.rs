@@ -1,83 +1,15 @@
 //! Tests for release operations.
 
 use super::*;
-use crate::auth::{
-    AuthenticationProvider, InstallationId, InstallationPermissions, InstallationToken,
-    JsonWebToken,
-};
+use crate::auth::InstallationId;
 use crate::client::{ClientConfig, GitHubClient};
-use crate::error::{ApiError, AuthError};
-use chrono::{Duration, Utc};
+use crate::error::ApiError;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-// ============================================================================
-// Mock AuthenticationProvider for Testing
-// ============================================================================
-
-#[derive(Clone)]
-struct MockAuthProvider {
-    installation_token: Result<InstallationToken, String>,
-}
-
-impl MockAuthProvider {
-    fn new_with_token(token: &str) -> Self {
-        let installation_id = InstallationId::new(12345);
-        let expires_at = Utc::now() + Duration::hours(1);
-        let permissions = InstallationPermissions::default();
-        let repositories = Vec::new();
-
-        Self {
-            installation_token: Ok(InstallationToken::new(
-                token.to_string(),
-                installation_id,
-                expires_at,
-                permissions,
-                repositories,
-            )),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl AuthenticationProvider for MockAuthProvider {
-    async fn app_token(&self) -> Result<JsonWebToken, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-
-    async fn installation_token(
-        &self,
-        _installation_id: InstallationId,
-    ) -> Result<InstallationToken, AuthError> {
-        self.installation_token
-            .clone()
-            .map_err(|msg| AuthError::TokenGenerationFailed { message: msg })
-    }
-
-    async fn refresh_installation_token(
-        &self,
-        installation_id: InstallationId,
-    ) -> Result<InstallationToken, AuthError> {
-        self.installation_token(installation_id).await
-    }
-
-    async fn list_installations(&self) -> Result<Vec<crate::auth::Installation>, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-
-    async fn get_installation_repositories(
-        &self,
-        _installation_id: InstallationId,
-    ) -> Result<Vec<crate::auth::Repository>, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-}
+#[path = "test_helpers.rs"]
+mod test_helpers;
+use test_helpers::MockAuthProvider;
 
 mod construction {
     use super::*;
@@ -395,6 +327,69 @@ mod release_operations {
         assert_eq!(release.id, 1);
     }
 
+    /// Verify get_release_by_tag handles tags with special characters (URL encoding).
+    ///
+    /// Tests GET /repos/:owner/:repo/releases/tags/:tag with tags containing slashes.
+    #[tokio::test]
+    async fn test_get_release_by_tag_with_slash() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let release_json = serde_json::json!({
+            "id": 1,
+            "node_id": "MDc6UmVsZWFzZTE=",
+            "tag_name": "release/v1.0",
+            "target_commitish": "main",
+            "name": "Release 1.0",
+            "body": "Release with slash in tag",
+            "draft": false,
+            "prerelease": false,
+            "author": {
+                "login": "octocat",
+                "id": 1,
+                "node_id": "MDQ6VXNlcjE=",
+                "type": "User"
+            },
+            "created_at": "2023-01-01T00:00:00Z",
+            "published_at": "2023-01-01T00:00:00Z",
+            "url": "https://api.github.com/repos/octocat/Hello-World/releases/1",
+            "html_url": "https://github.com/octocat/Hello-World/releases/tag/release/v1.0",
+            "assets": []
+        });
+
+        // URL-encoded path: release%2Fv1.0
+        Mock::given(method("GET"))
+            .and(path(
+                "/repos/octocat/Hello-World/releases/tags/release%2Fv1.0",
+            ))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
+            .and(header("Accept", "application/vnd.github+json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(release_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let result = client
+            .get_release_by_tag("octocat", "Hello-World", "release/v1.0")
+            .await;
+
+        assert!(result.is_ok());
+        let release = result.unwrap();
+        assert_eq!(release.tag_name, "release/v1.0");
+        assert_eq!(release.id, 1);
+    }
+
     /// Verify get_release fetches a release by ID.
     ///
     /// Tests GET /repos/:owner/:repo/releases/:id endpoint.
@@ -487,6 +482,12 @@ mod release_operations {
             .and(path("/repos/octocat/Hello-World/releases"))
             .and(header("Authorization", format!("Bearer {}", test_token)))
             .and(header("Accept", "application/vnd.github+json"))
+            .and(wiremock::matchers::body_json(serde_json::json!({
+                "tag_name": "v1.0.0",
+                "target_commitish": "main",
+                "name": "v1.0.0",
+                "body": "Description of the release"
+            })))
             .respond_with(ResponseTemplate::new(201).set_body_json(created_release_json))
             .mount(&mock_server)
             .await;
@@ -1043,6 +1044,7 @@ mod error_handling {
 
         Mock::given(method("DELETE"))
             .and(path("/repos/private-org/private-repo/releases/1"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
             .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
                 "message": "Resource not accessible by integration",
                 "documentation_url": "https://docs.github.com/rest/releases/releases#delete-a-release"
@@ -1068,5 +1070,82 @@ mod error_handling {
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::AuthorizationFailed));
+    }
+
+    /// Verify get_release returns AuthenticationFailed for 401 responses.
+    ///
+    /// Tests that a 401 Unauthorized response is properly mapped to AuthenticationFailed.
+    #[tokio::test]
+    async fn test_release_unauthorized() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_invalid_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/releases/12345"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+                "message": "Bad credentials",
+                "documentation_url": "https://docs.github.com/rest"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let result = client.get_release("octocat", "Hello-World", 12345).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::AuthenticationFailed
+        ));
+    }
+
+    /// Verify get_release returns HttpError for 500 server errors.
+    ///
+    /// Tests that 5xx server errors are properly mapped to HttpError.
+    #[tokio::test]
+    async fn test_release_server_error() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/releases/12345"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
+            .respond_with(ResponseTemplate::new(503).set_body_string("Service Unavailable"))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let result = client.get_release("octocat", "Hello-World", 12345).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::HttpError { status, .. } => {
+                assert_eq!(status, 503);
+            }
+            _ => panic!("Expected HttpError"),
+        }
     }
 }

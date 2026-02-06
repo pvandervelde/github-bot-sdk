@@ -1,4 +1,3 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/additional-operations.md (Workflow section)
 // Workflow and workflow run operations for GitHub API
 
 use chrono::{DateTime, Utc};

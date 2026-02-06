@@ -1,4 +1,3 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/additional-operations.md (Release section)
 // Release and release asset operations for GitHub API
 
 use chrono::{DateTime, Utc};
@@ -299,7 +298,8 @@ impl InstallationClient {
         repo: &str,
         tag: &str,
     ) -> Result<Release, ApiError> {
-        let path = format!("/repos/{}/{}/releases/tags/{}", owner, repo, tag);
+        let encoded_tag = urlencoding::encode(tag);
+        let path = format!("/repos/{}/{}/releases/tags/{}", owner, repo, encoded_tag);
         let response = self.get(&path).await?;
 
         let status = response.status();

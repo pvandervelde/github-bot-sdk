@@ -3,94 +3,17 @@
 //! **Specification**: `github-bot-sdk-specs/interfaces/installation-client.md`
 
 use super::*;
-use crate::auth::{
-    AuthenticationProvider, InstallationId, InstallationPermissions, InstallationToken,
-    JsonWebToken,
-};
+use crate::auth::InstallationId;
 use crate::client::ClientConfig;
-use crate::error::{ApiError, AuthError};
+use crate::error::ApiError;
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-// ============================================================================
-// Mock AuthenticationProvider for Testing
-// ============================================================================
-
-#[derive(Clone)]
-struct MockAuthProvider {
-    installation_token: Result<InstallationToken, String>,
-}
-
-impl MockAuthProvider {
-    fn new_with_token(token: &str) -> Self {
-        let installation_id = InstallationId::new(12345);
-        let expires_at = Utc::now() + Duration::hours(1);
-        let permissions = InstallationPermissions::default();
-        let repositories = Vec::new();
-
-        Self {
-            installation_token: Ok(InstallationToken::new(
-                token.to_string(),
-                installation_id,
-                expires_at,
-                permissions,
-                repositories,
-            )),
-        }
-    }
-
-    fn new_with_error(error_message: &str) -> Self {
-        Self {
-            installation_token: Err(error_message.to_string()),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl AuthenticationProvider for MockAuthProvider {
-    async fn app_token(&self) -> Result<JsonWebToken, AuthError> {
-        // Not used in installation client tests
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-
-    async fn installation_token(
-        &self,
-        _installation_id: InstallationId,
-    ) -> Result<InstallationToken, AuthError> {
-        self.installation_token
-            .clone()
-            .map_err(|msg| AuthError::TokenGenerationFailed { message: msg })
-    }
-
-    async fn refresh_installation_token(
-        &self,
-        installation_id: InstallationId,
-    ) -> Result<InstallationToken, AuthError> {
-        // Delegate to installation_token for simplicity in tests
-        self.installation_token(installation_id).await
-    }
-
-    async fn list_installations(&self) -> Result<Vec<crate::auth::Installation>, AuthError> {
-        // Not used in installation client tests
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-
-    async fn get_installation_repositories(
-        &self,
-        _installation_id: InstallationId,
-    ) -> Result<Vec<crate::auth::Repository>, AuthError> {
-        // Not used in installation client tests
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-}
+#[path = "test_helpers.rs"]
+mod test_helpers;
+use test_helpers::MockAuthProvider;
 
 // ============================================================================
 // Construction Tests

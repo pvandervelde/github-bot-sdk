@@ -1,83 +1,15 @@
 //! Tests for workflow operations.
 
 use super::*;
-use crate::auth::{
-    AuthenticationProvider, InstallationId, InstallationPermissions, InstallationToken,
-    JsonWebToken,
-};
+use crate::auth::InstallationId;
 use crate::client::{ClientConfig, GitHubClient};
-use crate::error::{ApiError, AuthError};
-use chrono::{Duration, Utc};
+use crate::error::ApiError;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-// ============================================================================
-// Mock AuthenticationProvider for Testing
-// ============================================================================
-
-#[derive(Clone)]
-struct MockAuthProvider {
-    installation_token: Result<InstallationToken, String>,
-}
-
-impl MockAuthProvider {
-    fn new_with_token(token: &str) -> Self {
-        let installation_id = InstallationId::new(12345);
-        let expires_at = Utc::now() + Duration::hours(1);
-        let permissions = InstallationPermissions::default();
-        let repositories = Vec::new();
-
-        Self {
-            installation_token: Ok(InstallationToken::new(
-                token.to_string(),
-                installation_id,
-                expires_at,
-                permissions,
-                repositories,
-            )),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl AuthenticationProvider for MockAuthProvider {
-    async fn app_token(&self) -> Result<JsonWebToken, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-
-    async fn installation_token(
-        &self,
-        _installation_id: InstallationId,
-    ) -> Result<InstallationToken, AuthError> {
-        self.installation_token
-            .clone()
-            .map_err(|msg| AuthError::TokenGenerationFailed { message: msg })
-    }
-
-    async fn refresh_installation_token(
-        &self,
-        installation_id: InstallationId,
-    ) -> Result<InstallationToken, AuthError> {
-        self.installation_token(installation_id).await
-    }
-
-    async fn list_installations(&self) -> Result<Vec<crate::auth::Installation>, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-
-    async fn get_installation_repositories(
-        &self,
-        _installation_id: InstallationId,
-    ) -> Result<Vec<crate::auth::Repository>, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-}
+#[path = "test_helpers.rs"]
+mod test_helpers;
+use test_helpers::MockAuthProvider;
 
 mod construction {
     use super::*;
@@ -336,6 +268,13 @@ mod workflow_operations {
             .and(path(
                 "/repos/octocat/Hello-World/actions/workflows/161335/dispatches",
             ))
+            .and(wiremock::matchers::body_json(serde_json::json!({
+                "ref": "main",
+                "inputs": {
+                    "name": "Mona the Octocat",
+                    "home": "San Francisco, CA"
+                }
+            })))
             .respond_with(ResponseTemplate::new(204))
             .mount(&mock_server)
             .await;
@@ -836,6 +775,83 @@ mod error_handling {
                 assert!(message.contains("Workflow is disabled"));
             }
             _ => panic!("Expected InvalidRequest error"),
+        }
+    }
+
+    /// Verify get_workflow returns AuthenticationFailed for 401 responses.
+    ///
+    /// Tests that a 401 Unauthorized response is properly mapped to AuthenticationFailed.
+    #[tokio::test]
+    async fn test_workflow_unauthorized() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_invalid_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/actions/workflows/161335"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+                "message": "Bad credentials",
+                "documentation_url": "https://docs.github.com/rest"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let result = client.get_workflow("octocat", "Hello-World", 161335).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::AuthenticationFailed
+        ));
+    }
+
+    /// Verify get_workflow returns HttpError for 500 server errors.
+    ///
+    /// Tests that 5xx server errors are properly mapped to HttpError.
+    #[tokio::test]
+    async fn test_workflow_server_error() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/actions/workflows/161335"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
+            .respond_with(ResponseTemplate::new(500).set_body_string("Internal Server Error"))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let installation_id = InstallationId::new(12345);
+        let client = github_client
+            .installation_by_id(installation_id)
+            .await
+            .unwrap();
+
+        let result = client.get_workflow("octocat", "Hello-World", 161335).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::HttpError { status, .. } => {
+                assert_eq!(status, 500);
+            }
+            _ => panic!("Expected HttpError"),
         }
     }
 }

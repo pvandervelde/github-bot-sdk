@@ -1,6 +1,6 @@
 //! Installation Client Types and Operations
 //!
-//! **Specification**: `github-bot-sdk-specs/interfaces/installation-client.md`
+//! **Specification**: `docs/spec/interfaces/installation-client.md`
 //!
 //! This module provides installation-scoped access to GitHub API operations.
 //! The `InstallationClient` is bound to a specific installation ID and uses

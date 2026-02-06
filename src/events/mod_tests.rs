@@ -255,26 +255,104 @@ fn test_event_payload_new() {
 
 /// Verify EventPayload::parse_pull_request returns typed event.
 #[test]
-#[ignore] // Will pass after implementation
 fn test_event_payload_parse_pull_request() {
     let value = json!({
         "action": "opened",
         "number": 42,
         "pull_request": {
             "id": 1,
+            "node_id": "PR_node_123",
             "number": 42,
             "title": "Test",
             "state": "open",
             "locked": false,
-            "user": {"login": "test", "id": 123},
+            "user": {
+                "login": "test",
+                "id": 123,
+                "node_id": "U_node_123",
+                "type": "User"
+            },
+            "body": "Test body",
             "created_at": "2024-01-01T00:00:00Z",
             "updated_at": "2024-01-01T00:00:00Z",
-            "head": {"ref": "feature", "sha": "abc", "repo": null},
-            "base": {"ref": "main", "sha": "def", "repo": null},
-            "draft": false
+            "closed_at": null,
+            "merged_at": null,
+            "merge_commit_sha": null,
+            "assignees": [],
+            "requested_reviewers": [],
+            "requested_teams": [],
+            "labels": [],
+            "milestone": null,
+            "draft": false,
+            "head": {
+                "label": "test:feature",
+                "ref": "feature",
+                "sha": "abc123",
+                "user": {
+                    "login": "test",
+                    "id": 123,
+                    "node_id": "U_node_123",
+                    "type": "User"
+                },
+                "repo": {
+                    "id": 123456,
+                    "name": "repo",
+                    "full_name": "test/repo"
+                }
+            },
+            "base": {
+                "label": "test:main",
+                "ref": "main",
+                "sha": "def456",
+                "user": {
+                    "login": "test",
+                    "id": 123,
+                    "node_id": "U_node_123",
+                    "type": "User"
+                },
+                "repo": {
+                    "id": 123456,
+                    "name": "repo",
+                    "full_name": "test/repo"
+                }
+            },
+            "author_association": "CONTRIBUTOR",
+            "auto_merge": null,
+            "active_lock_reason": null,
+            "merged": false,
+            "mergeable": null,
+            "rebaseable": null,
+            "mergeable_state": "unknown",
+            "merged_by": null,
+            "comments": 0,
+            "review_comments": 0,
+            "maintainer_can_modify": false,
+            "commits": 1,
+            "additions": 10,
+            "deletions": 5,
+            "changed_files": 1,
+            "html_url": "https://github.com/test/repo/pull/42"
         },
-        "repository": {},
-        "sender": {"id": 1, "login": "test", "type": "User"}
+        "repository": {
+            "id": 123456,
+            "name": "repo",
+            "full_name": "test/repo",
+            "owner": {
+                "login": "test",
+                "id": 123,
+                "avatar_url": "https://example.com/avatar.png",
+                "type": "User"
+            },
+            "private": false,
+            "description": "Test repository",
+            "default_branch": "main",
+            "html_url": "https://github.com/test/repo",
+            "clone_url": "https://github.com/test/repo.git",
+            "ssh_url": "git@github.com:test/repo.git",
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z"
+        },
+        "sender": {"id": 1, "login": "test", "node_id": "U_node_1", "type": "User"}
     });
 
     let payload = EventPayload::new(value);
@@ -282,32 +360,64 @@ fn test_event_payload_parse_pull_request() {
 
     assert_eq!(pr_event.number, 42);
     assert_eq!(pr_event.action, PullRequestAction::Opened);
+    assert_eq!(pr_event.pull_request.title, "Test");
 }
 
 /// Verify EventPayload::parse_issue returns typed event.
 #[test]
-#[ignore] // Will pass after implementation
 fn test_event_payload_parse_issue() {
     let value = json!({
         "action": "opened",
         "issue": {
             "id": 1,
+            "node_id": "I_node_1",
             "number": 10,
             "title": "Test Issue",
             "state": "open",
             "locked": false,
-            "user": {"login": "test", "id": 123},
+            "user": {
+                "login": "test",
+                "id": 123,
+                "node_id": "U_node_123",
+                "type": "User"
+            },
+            "body": "Issue body",
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "closed_at": null,
+            "assignees": [],
+            "labels": [],
+            "milestone": null,
+            "comments": 0,
+            "html_url": "https://github.com/test/repo/issues/10"
+        },
+        "repository": {
+            "id": 123456,
+            "name": "repo",
+            "full_name": "test/repo",
+            "owner": {
+                "login": "test",
+                "id": 123,
+                "avatar_url": "https://example.com/avatar.png",
+                "type": "User"
+            },
+            "private": false,
+            "description": "Test repository",
+            "default_branch": "main",
+            "html_url": "https://github.com/test/repo",
+            "clone_url": "https://github.com/test/repo.git",
+            "ssh_url": "git@github.com:test/repo.git",
             "created_at": "2024-01-01T00:00:00Z",
             "updated_at": "2024-01-01T00:00:00Z"
         },
-        "repository": {},
-        "sender": {"id": 1, "login": "test", "type": "User"}
+        "sender": {"id": 1, "login": "test", "node_id": "U_node_1", "type": "User"}
     });
 
     let payload = EventPayload::new(value);
     let issue_event = payload.parse_issue().expect("Failed to parse");
 
     assert_eq!(issue_event.issue.number, 10);
+    assert_eq!(issue_event.issue.title, "Test Issue");
     assert_eq!(issue_event.action, IssueAction::Opened);
 }
 

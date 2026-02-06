@@ -1055,7 +1055,7 @@ pub struct RateLimitInfo {
 /// - **App-level**: JWT tokens for operations as the GitHub App (discovering installations, managing app)
 /// - **Installation-level**: Installation tokens for operations within a specific installation context
 ///
-/// See `github-bot-sdk-specs/architecture/app-level-authentication.md` for detailed usage patterns.
+/// See `docs/spec/architecture/app-level-authentication.md` for detailed usage patterns.
 #[async_trait::async_trait]
 pub trait AuthenticationProvider: Send + Sync {
     /// Get JWT token for app-level GitHub API operations.

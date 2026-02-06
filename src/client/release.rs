@@ -1,4 +1,3 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/additional-operations.md (Release section)
 // Release and release asset operations for GitHub API
 
 use chrono::{DateTime, Utc};
@@ -156,77 +155,444 @@ impl InstallationClient {
 
     /// List releases in a repository.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
-    pub async fn list_releases(&self, _owner: &str, _repo: &str) -> Result<Vec<Release>, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+    /// Retrieves all releases for a repository, including drafts and prereleases.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    ///
+    /// # Returns
+    ///
+    /// Returns vector of releases ordered by creation date (newest first).
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Repository does not exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let releases = client.list_releases("owner", "repo").await?;
+    /// for release in releases {
+    ///     println!("Release: {} ({})", release.name.unwrap_or_default(), release.tag_name);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_releases(&self, owner: &str, repo: &str) -> Result<Vec<Release>, ApiError> {
+        let path = format!("/repos/{}/{}/releases", owner, repo);
+        let response = self.get(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        response.json().await.map_err(ApiError::from)
     }
 
     /// Get the latest published release.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
-    pub async fn get_latest_release(&self, _owner: &str, _repo: &str) -> Result<Release, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+    /// Returns the most recent non-draft, non-prerelease release.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    ///
+    /// # Returns
+    ///
+    /// Returns the latest published `Release`.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Repository or no published releases exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get_latest_release("owner", "repo").await?;
+    /// println!("Latest: {} ({})", release.name.unwrap_or_default(), release.tag_name);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_latest_release(&self, owner: &str, repo: &str) -> Result<Release, ApiError> {
+        let path = format!("/repos/{}/{}/releases/latest", owner, repo);
+        let response = self.get(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        response.json().await.map_err(ApiError::from)
     }
 
     /// Get a release by tag name.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Retrieves a release by its git tag name.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `tag` - Git tag name
+    ///
+    /// # Returns
+    ///
+    /// Returns the `Release` with the specified tag.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Release with tag does not exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get_release_by_tag("owner", "repo", "v1.0.0").await?;
+    /// println!("Release: {}", release.tag_name);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_release_by_tag(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _tag: &str,
+        owner: &str,
+        repo: &str,
+        tag: &str,
     ) -> Result<Release, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let encoded_tag = urlencoding::encode(tag);
+        let path = format!("/repos/{}/{}/releases/tags/{}", owner, repo, encoded_tag);
+        let response = self.get(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        response.json().await.map_err(ApiError::from)
     }
 
     /// Get a release by ID.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Retrieves a release by its unique identifier.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `release_id` - Release ID
+    ///
+    /// # Returns
+    ///
+    /// Returns the `Release` with the specified ID.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Release does not exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get_release("owner", "repo", 12345).await?;
+    /// println!("Release: {}", release.tag_name);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_release(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _release_id: u64,
+        owner: &str,
+        repo: &str,
+        release_id: u64,
     ) -> Result<Release, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
+        let response = self.get(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        response.json().await.map_err(ApiError::from)
     }
 
     /// Create a new release.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Creates a new release for a repository. Can create published releases,
+    /// drafts, or prereleases.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `request` - Release creation parameters
+    ///
+    /// # Returns
+    ///
+    /// Returns the created `Release`.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::InvalidRequest` - Tag already exists or invalid parameters
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::{InstallationClient, CreateReleaseRequest};
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let request = CreateReleaseRequest {
+    ///     tag_name: "v1.0.0".to_string(),
+    ///     name: Some("Version 1.0.0".to_string()),
+    ///     body: Some("Release notes".to_string()),
+    ///     draft: Some(false),
+    ///     prerelease: Some(false),
+    ///     target_commitish: None,
+    /// };
+    /// let release = client.create_release("owner", "repo", request).await?;
+    /// println!("Created release: {}", release.tag_name);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn create_release(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _request: CreateReleaseRequest,
+        owner: &str,
+        repo: &str,
+        request: CreateReleaseRequest,
     ) -> Result<Release, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!("/repos/{}/{}/releases", owner, repo);
+        let response = self.post(&path, &request).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                422 => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Validation error".to_string());
+                    ApiError::InvalidRequest { message }
+                }
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        response.json().await.map_err(ApiError::from)
     }
 
     /// Update an existing release.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Updates release properties. Only specified fields are modified.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `release_id` - Release ID
+    /// * `request` - Fields to update
+    ///
+    /// # Returns
+    ///
+    /// Returns the updated `Release`.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Release does not exist
+    /// * `ApiError::InvalidRequest` - Invalid parameters
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::{InstallationClient, UpdateReleaseRequest};
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let request = UpdateReleaseRequest {
+    ///     name: Some("Updated name".to_string()),
+    ///     body: Some("Updated notes".to_string()),
+    ///     ..Default::default()
+    /// };
+    /// let release = client.update_release("owner", "repo", 12345, request).await?;
+    /// println!("Updated release: {}", release.tag_name);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn update_release(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _release_id: u64,
-        _request: UpdateReleaseRequest,
+        owner: &str,
+        repo: &str,
+        release_id: u64,
+        request: UpdateReleaseRequest,
     ) -> Result<Release, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
+        let response = self.patch(&path, &request).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                422 => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Validation error".to_string());
+                    ApiError::InvalidRequest { message }
+                }
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        response.json().await.map_err(ApiError::from)
     }
 
     /// Delete a release.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Deletes a release. Does not delete the associated git tag.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `release_id` - Release ID
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on successful deletion.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Release does not exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.delete_release("owner", "repo", 12345).await?;
+    /// println!("Release deleted");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn delete_release(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _release_id: u64,
+        owner: &str,
+        repo: &str,
+        release_id: u64,
     ) -> Result<(), ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
+        let response = self.delete(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        Ok(())
     }
 }
 

@@ -1,4 +1,3 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/additional-operations.md (Workflow section)
 // Workflow and workflow run operations for GitHub API
 
 use chrono::{DateTime, Utc};
@@ -106,38 +105,205 @@ impl InstallationClient {
 
     /// List workflows in a repository.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
-    pub async fn list_workflows(
-        &self,
-        _owner: &str,
-        _repo: &str,
-    ) -> Result<Vec<Workflow>, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+    /// Retrieves all GitHub Actions workflows for a repository.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    ///
+    /// # Returns
+    ///
+    /// Returns vector of workflows.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Repository does not exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let workflows = client.list_workflows("owner", "repo").await?;
+    /// for workflow in workflows {
+    ///     println!("Workflow: {} ({})", workflow.name, workflow.state);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_workflows(&self, owner: &str, repo: &str) -> Result<Vec<Workflow>, ApiError> {
+        let path = format!("/repos/{}/{}/actions/workflows", owner, repo);
+        let response = self.get(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        #[derive(Deserialize)]
+        struct WorkflowsResponse {
+            workflows: Vec<Workflow>,
+        }
+
+        let workflows_response: WorkflowsResponse =
+            response.json().await.map_err(ApiError::from)?;
+        Ok(workflows_response.workflows)
     }
 
     /// Get a specific workflow by ID.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Retrieves details about a single workflow.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `workflow_id` - Workflow ID
+    ///
+    /// # Returns
+    ///
+    /// Returns the `Workflow` with the specified ID.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Workflow does not exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let workflow = client.get_workflow("owner", "repo", 123456).await?;
+    /// println!("Workflow: {} at {}", workflow.name, workflow.path);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_workflow(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _workflow_id: u64,
+        owner: &str,
+        repo: &str,
+        workflow_id: u64,
     ) -> Result<Workflow, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!(
+            "/repos/{}/{}/actions/workflows/{}",
+            owner, repo, workflow_id
+        );
+        let response = self.get(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        response.json().await.map_err(ApiError::from)
     }
 
     /// Trigger a workflow run.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Manually triggers a workflow run using workflow_dispatch event.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `workflow_id` - Workflow ID
+    /// * `request` - Trigger parameters (ref and optional inputs)
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on successful trigger.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Workflow does not exist
+    /// * `ApiError::InvalidRequest` - Workflow not configured for manual dispatch
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::{InstallationClient, TriggerWorkflowRequest};
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let request = TriggerWorkflowRequest {
+    ///     git_ref: "main".to_string(),
+    ///     inputs: None,
+    /// };
+    /// client.trigger_workflow("owner", "repo", 123456, request).await?;
+    /// println!("Workflow triggered");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn trigger_workflow(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _workflow_id: u64,
-        _request: TriggerWorkflowRequest,
+        owner: &str,
+        repo: &str,
+        workflow_id: u64,
+        request: TriggerWorkflowRequest,
     ) -> Result<(), ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!(
+            "/repos/{}/{}/actions/workflows/{}/dispatches",
+            owner, repo, workflow_id
+        );
+        let response = self.post(&path, &request).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                422 => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Validation error".to_string());
+                    ApiError::InvalidRequest { message }
+                }
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        Ok(())
     }
 
     // ========================================================================
@@ -146,50 +312,269 @@ impl InstallationClient {
 
     /// List workflow runs for a workflow.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Retrieves workflow runs for a specific workflow.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `workflow_id` - Workflow ID
+    ///
+    /// # Returns
+    ///
+    /// Returns vector of workflow runs.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Workflow does not exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let runs = client.list_workflow_runs("owner", "repo", 123456).await?;
+    /// for run in runs {
+    ///     println!("Run #{}: {} ({})", run.run_number, run.status, run.conclusion.unwrap_or_default());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn list_workflow_runs(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _workflow_id: u64,
+        owner: &str,
+        repo: &str,
+        workflow_id: u64,
     ) -> Result<Vec<WorkflowRun>, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!(
+            "/repos/{}/{}/actions/workflows/{}/runs",
+            owner, repo, workflow_id
+        );
+        let response = self.get(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        #[derive(Deserialize)]
+        struct WorkflowRunsResponse {
+            workflow_runs: Vec<WorkflowRun>,
+        }
+
+        let runs_response: WorkflowRunsResponse = response.json().await.map_err(ApiError::from)?;
+        Ok(runs_response.workflow_runs)
     }
 
     /// Get a specific workflow run by ID.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Retrieves details about a single workflow run.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `run_id` - Workflow run ID
+    ///
+    /// # Returns
+    ///
+    /// Returns the `WorkflowRun` with the specified ID.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Workflow run does not exist
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let run = client.get_workflow_run("owner", "repo", 987654).await?;
+    /// println!("Run #{}: {}", run.run_number, run.status);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_workflow_run(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _run_id: u64,
+        owner: &str,
+        repo: &str,
+        run_id: u64,
     ) -> Result<WorkflowRun, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!("/repos/{}/{}/actions/runs/{}", owner, repo, run_id);
+        let response = self.get(&path).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        response.json().await.map_err(ApiError::from)
     }
 
     /// Cancel a workflow run.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Cancels a workflow run that is in progress.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `run_id` - Workflow run ID
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on successful cancellation.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Workflow run does not exist
+    /// * `ApiError::InvalidRequest` - Workflow run cannot be cancelled
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.cancel_workflow_run("owner", "repo", 987654).await?;
+    /// println!("Workflow run cancelled");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn cancel_workflow_run(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _run_id: u64,
+        owner: &str,
+        repo: &str,
+        run_id: u64,
     ) -> Result<(), ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!("/repos/{}/{}/actions/runs/{}/cancel", owner, repo, run_id);
+        let response = self.post(&path, &serde_json::json!({})).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                422 => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Validation error".to_string());
+                    ApiError::InvalidRequest { message }
+                }
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        Ok(())
     }
 
     /// Re-run a workflow run.
     ///
-    /// See github-bot-sdk-specs/interfaces/additional-operations.md
+    /// Re-runs a completed workflow run.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner
+    /// * `repo` - Repository name
+    /// * `run_id` - Workflow run ID
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on successful re-run trigger.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` - Workflow run does not exist
+    /// * `ApiError::InvalidRequest` - Workflow run cannot be re-run
+    /// * `ApiError::AuthorizationFailed` - Insufficient permissions
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use github_bot_sdk::client::InstallationClient;
+    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.rerun_workflow_run("owner", "repo", 987654).await?;
+    /// println!("Workflow run re-triggered");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn rerun_workflow_run(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _run_id: u64,
+        owner: &str,
+        repo: &str,
+        run_id: u64,
     ) -> Result<(), ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/additional-operations.md")
+        let path = format!("/repos/{}/{}/actions/runs/{}/rerun", owner, repo, run_id);
+        let response = self.post(&path, &serde_json::json!({})).await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                404 => ApiError::NotFound,
+                403 => ApiError::AuthorizationFailed,
+                401 => ApiError::AuthenticationFailed,
+                422 => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Validation error".to_string());
+                    ApiError::InvalidRequest { message }
+                }
+                _ => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
+                    ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    }
+                }
+            });
+        }
+
+        Ok(())
     }
 }
 

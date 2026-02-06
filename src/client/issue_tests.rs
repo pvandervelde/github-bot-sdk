@@ -1,83 +1,15 @@
 //! Tests for issue operations.
 
 use super::*;
-use crate::auth::{
-    AuthenticationProvider, InstallationId, InstallationPermissions, InstallationToken,
-    JsonWebToken,
-};
+use crate::auth::InstallationId;
 use crate::client::{ClientConfig, GitHubClient};
-use crate::error::{ApiError, AuthError};
-use chrono::{Duration, Utc};
+use crate::error::ApiError;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-// ============================================================================
-// Mock AuthenticationProvider for Testing
-// ============================================================================
-
-#[derive(Clone)]
-struct MockAuthProvider {
-    installation_token: Result<InstallationToken, String>,
-}
-
-impl MockAuthProvider {
-    fn new_with_token(token: &str) -> Self {
-        let installation_id = InstallationId::new(12345);
-        let expires_at = Utc::now() + Duration::hours(1);
-        let permissions = InstallationPermissions::default();
-        let repositories = Vec::new();
-
-        Self {
-            installation_token: Ok(InstallationToken::new(
-                token.to_string(),
-                installation_id,
-                expires_at,
-                permissions,
-                repositories,
-            )),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl AuthenticationProvider for MockAuthProvider {
-    async fn app_token(&self) -> Result<JsonWebToken, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-
-    async fn installation_token(
-        &self,
-        _installation_id: InstallationId,
-    ) -> Result<InstallationToken, AuthError> {
-        self.installation_token
-            .clone()
-            .map_err(|msg| AuthError::TokenGenerationFailed { message: msg })
-    }
-
-    async fn refresh_installation_token(
-        &self,
-        installation_id: InstallationId,
-    ) -> Result<InstallationToken, AuthError> {
-        self.installation_token(installation_id).await
-    }
-
-    async fn list_installations(&self) -> Result<Vec<crate::auth::Installation>, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-
-    async fn get_installation_repositories(
-        &self,
-        _installation_id: InstallationId,
-    ) -> Result<Vec<crate::auth::Repository>, AuthError> {
-        Err(AuthError::TokenGenerationFailed {
-            message: "Not implemented for mock".to_string(),
-        })
-    }
-}
+#[path = "test_helpers.rs"]
+mod test_helpers;
+use test_helpers::MockAuthProvider;
 
 mod construction {
     use super::*;
@@ -1563,21 +1495,122 @@ mod serialization {
 }
 
 mod error_handling {
+    use super::*;
+
+    /// Verify get_issue returns NotFound error for 404 response.
     #[tokio::test]
-    #[ignore = "TODO: Mock: 404 response returns ApiError::NotFound"]
     async fn test_issue_not_found() {
-        todo!("Mock: 404 response returns ApiError::NotFound")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/issues/999"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found",
+                "documentation_url": "https://docs.github.com/rest/issues/issues#get-an-issue"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client.get_issue("owner", "repo", 999).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound));
     }
 
+    /// Verify issue operations return AuthorizationFailed error for 403 response.
     #[tokio::test]
-    #[ignore = "TODO: Mock: 403 response returns ApiError::Forbidden"]
     async fn test_forbidden_access() {
-        todo!("Mock: 403 response returns ApiError::Forbidden")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/private-repo/issues/1"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "message": "Resource not accessible by integration",
+                "documentation_url": "https://docs.github.com/rest/issues/issues#get-an-issue"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client.get_issue("owner", "private-repo", 1).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::AuthorizationFailed));
     }
 
+    /// Verify create_issue returns InvalidRequest error for 422 response.
     #[tokio::test]
-    #[ignore = "TODO: Mock: 422 response for invalid input"]
     async fn test_validation_error() {
-        todo!("Mock: 422 response for invalid input")
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path("/repos/owner/repo/issues"))
+            .respond_with(ResponseTemplate::new(422).set_body_json(serde_json::json!({
+                "message": "Validation Failed",
+                "errors": [
+                    {
+                        "resource": "Issue",
+                        "field": "title",
+                        "code": "missing_field"
+                    }
+                ],
+                "documentation_url": "https://docs.github.com/rest/issues/issues#create-an-issue"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let request = CreateIssueRequest {
+            title: "".to_string(), // Invalid: empty title
+            body: None,
+            assignees: None,
+            milestone: None,
+            labels: None,
+        };
+
+        let result = client.create_issue("owner", "repo", request).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        match error {
+            ApiError::InvalidRequest { message } => {
+                assert!(message.contains("Validation Failed"));
+            }
+            _ => panic!("Expected InvalidRequest error, got: {:?}", error),
+        }
     }
 }

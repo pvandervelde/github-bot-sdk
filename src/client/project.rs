@@ -1,4 +1,4 @@
-// GENERATED FROM: github-bot-sdk-specs/interfaces/project-operations.md
+// GENERATED FROM: docs/spec/interfaces/project-operations.md
 // GitHub Projects v2 operations
 
 use chrono::{DateTime, Utc};
@@ -94,51 +94,51 @@ impl InstallationClient {
 
     /// List all Projects v2 for an organization.
     ///
-    /// See github-bot-sdk-specs/interfaces/project-operations.md
+    /// See docs/spec/interfaces/project-operations.md
     pub async fn list_organization_projects(&self, _org: &str) -> Result<Vec<ProjectV2>, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/project-operations.md")
+        unimplemented!("See docs/spec/interfaces/project-operations.md")
     }
 
     /// List all Projects v2 for a user.
     ///
-    /// See github-bot-sdk-specs/interfaces/project-operations.md
+    /// See docs/spec/interfaces/project-operations.md
     pub async fn list_user_projects(&self, _username: &str) -> Result<Vec<ProjectV2>, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/project-operations.md")
+        unimplemented!("See docs/spec/interfaces/project-operations.md")
     }
 
     /// Get details about a specific project.
     ///
-    /// See github-bot-sdk-specs/interfaces/project-operations.md
+    /// See docs/spec/interfaces/project-operations.md
     pub async fn get_project(
         &self,
         _owner: &str,
         _project_number: u64,
     ) -> Result<ProjectV2, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/project-operations.md")
+        unimplemented!("See docs/spec/interfaces/project-operations.md")
     }
 
     /// Add an issue or pull request to a project.
     ///
-    /// See github-bot-sdk-specs/interfaces/project-operations.md
+    /// See docs/spec/interfaces/project-operations.md
     pub async fn add_item_to_project(
         &self,
         _owner: &str,
         _project_number: u64,
         _content_node_id: &str,
     ) -> Result<ProjectV2Item, ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/project-operations.md")
+        unimplemented!("See docs/spec/interfaces/project-operations.md")
     }
 
     /// Remove an item from a project.
     ///
-    /// See github-bot-sdk-specs/interfaces/project-operations.md
+    /// See docs/spec/interfaces/project-operations.md
     pub async fn remove_item_from_project(
         &self,
         _owner: &str,
         _project_number: u64,
         _item_id: &str,
     ) -> Result<(), ApiError> {
-        unimplemented!("See github-bot-sdk-specs/interfaces/project-operations.md")
+        unimplemented!("See docs/spec/interfaces/project-operations.md")
     }
 }
 

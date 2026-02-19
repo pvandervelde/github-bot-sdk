@@ -341,3 +341,75 @@ All GitHub domain identifiers MUST use branded types (newtype pattern) to preven
 - Include webhook processing examples
 - Show proper error handling patterns
 - Demonstrate authentication flow variations
+
+## Commit Operations Constraints
+
+### Module Placement
+
+**File Location**: `src/client/commit.rs`
+
+**Pattern**: Infrastructure adapter layer following same structure as `repository.rs`, `release.rs`, `pull_request.rs`
+
+**Rationale**: Commit operations are installation-scoped GitHub API calls, consistent with other client operations
+
+### Type Definitions
+
+**Required Derivations**: All commit types MUST derive `Debug, Clone, Serialize, Deserialize`
+
+**Types to Create**:
+
+- `Commit` - Full commit with GitHub metadata
+- `CommitDetails` - Git-level metadata (author, committer, message, tree)
+- `GitSignature` - Identity record (name, email, date)
+- `CommitReference` - Minimal pointer (SHA + URL)
+- `Verification` - GPG signature verification status
+- `Comparison` - Comparison result between two refs
+- `FileChange` - File diff in comparison
+
+**Type Reuse**: `IssueUser` for author/committer GitHub user associations
+
+### Operation Signatures
+
+All operations MUST return `Result<T, ApiError>` and be async:
+
+- `get_commit(owner, repo, sha) -> Result<Commit, ApiError>`
+- `list_commits(owner, repo, filters...) -> Result<Vec<Commit>, ApiError>`
+- `compare_commits(owner, repo, base, head) -> Result<Comparison, ApiError>`
+
+### GitHub API Endpoints
+
+MUST use exact endpoints:
+
+1. `GET /repos/{owner}/{repo}/commits/{ref}` - get_commit
+2. `GET /repos/{owner}/{repo}/commits?params` - list_commits
+3. `GET /repos/{owner}/{repo}/compare/{base}...{head}` - compare_commits
+
+### Error Mapping
+
+| Status | ApiError | Scenario |
+|--------|----------|----------|
+| 404 | NotFound | Commit/ref/repo not found |
+| 422 | InvalidRequest | Invalid SHA, empty repo |
+| 403 | AuthorizationFailed | Insufficient permissions |
+| 401 | AuthenticationFailed | Token expired |
+| 429 | RateLimitExceeded | Rate limit hit |
+
+### Pagination and Performance
+
+- Default: 30 items/page, Max: 100 items/page (GitHub limit)
+- Performance targets (p95): get_commit <200ms, list_commits <500ms, compare_commits <1000ms
+- Single API call per operation
+
+### Security
+
+Error messages MUST include context but NEVER include tokens, keys, or sensitive data
+
+### Testing Coverage
+
+- Unit tests: Type deserialization, error mapping, ordering
+- Integration tests: Real API calls to public repos
+- Target: >90% coverage
+
+### Documentation
+
+All public types/methods MUST have complete rustdoc with examples, parameters, errors, and links

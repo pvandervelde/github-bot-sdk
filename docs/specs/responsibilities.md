@@ -361,3 +361,65 @@ This document defines the responsibilities of components within the GitHub Bot S
 
 - **GitHub API Operations**: Verify API contract compliance
 - **Webhook Processing**: Validate GitHub webhook format expectations
+
+## Commit Operations Components
+
+### CommitOperations (methods on InstallationClient)
+
+**Responsibilities:**
+
+- **Knows**: GitHub API commit endpoints, commit query parameters, comparison ref syntax, pagination rules
+- **Does**: Retrieves commit details, lists commits with filters, compares refs, parses responses, maps errors
+
+**Collaborators:**
+
+- `InstallationClient` (uses HTTP methods and authentication)
+- `ApiError` (maps HTTP status to error types)
+- `IssueUser` (reuses for author/committer GitHub user associations)
+
+**Roles:**
+
+- **Repository Historian**: Provides access to repository commit history
+- **API Gateway**: Translates domain requests to GitHub API calls
+- **Validation Guardian**: Validates ref formats before API calls
+
+**Operations:**
+
+1. **get_commit(owner, repo, sha)** - Retrieve single commit by SHA/ref
+2. **list_commits(owner, repo, filters...)** - List commits with pagination and filtering
+3. **compare_commits(owner, repo, base, head)** - Compare two refs and return commits/files between them
+
+### Commit (Domain Type)
+
+**Responsibilities:**
+
+- **Knows**: Commit SHA, metadata, parent commits, tree reference, verification status, GitHub user associations
+- **Does**: Serializes/deserializes from GitHub API JSON, provides type-safe access to commit data
+
+**Collaborators:**
+
+- `CommitDetails` (nested Git-level commit information)
+- `IssueUser` (GitHub user for author/committer if email matches)
+- `CommitReference` (parent commits and tree references)
+
+**Roles:**
+
+- **Data Transfer Object**: Carries commit information from API to application
+- **Type Safety Provider**: Ensures typed access to commit data
+
+### Comparison (Domain Type)
+
+**Responsibilities:**
+
+- **Knows**: Base commit, head commit, merge base, status, commit differences, file changes
+- **Does**: Encapsulates complete comparison result for release automation
+
+**Collaborators:**
+
+- `Commit` (list of commits between refs)
+- `FileChange` (list of changed files with statistics)
+
+**Roles:**
+
+- **Comparison Result Container**: Single response for "what changed between two refs"
+- **Release Automation Enabler**: Provides all data for changelog generation

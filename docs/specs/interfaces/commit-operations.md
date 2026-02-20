@@ -528,6 +528,7 @@ impl InstallationClient {
 ### Error Context
 
 All errors must preserve context for debugging:
+
 - Operation being performed
 - Repository (owner/repo)
 - Ref/SHA that failed
@@ -611,16 +612,16 @@ async fn generate_changelog(
     to_tag: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let comparison = client.compare_commits(owner, repo, from_tag, to_tag).await?;
-    
+
     let mut changelog = format!("# Changes from {} to {}\n\n", from_tag, to_tag);
-    changelog.push_str(&format!("**{} commits** by {} contributors\n\n", 
+    changelog.push_str(&format!("**{} commits** by {} contributors\n\n",
         comparison.total_commits,
         comparison.commits.iter()
             .filter_map(|c| c.author.as_ref().map(|a| a.login.as_str()))
             .collect::<std::collections::HashSet<_>>()
             .len()
     ));
-    
+
     changelog.push_str("## Commits\n\n");
     for commit in &comparison.commits {
         let message = commit.commit.message.lines().next().unwrap_or("");
@@ -629,13 +630,13 @@ async fn generate_changelog(
             .unwrap_or("unknown");
         changelog.push_str(&format!("- {} (@{})\n", message, author));
     }
-    
+
     changelog.push_str(&format!("\n## Files Changed ({})\n\n", comparison.files.len()));
     for file in &comparison.files {
-        changelog.push_str(&format!("- `{}`: +{} -{}\n", 
+        changelog.push_str(&format!("- `{}`: +{} -{}\n",
             file.filename, file.additions, file.deletions));
     }
-    
+
     Ok(changelog)
 }
 ```
@@ -664,7 +665,7 @@ async fn find_author_commits(
         Some(100),  // max per page
         None,  // first page
     ).await?;
-    
+
     Ok(commits.iter()
         .map(|c| c.commit.message.lines().next().unwrap_or("").to_string())
         .collect())

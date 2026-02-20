@@ -254,6 +254,7 @@
 //! - [GitHub REST API Documentation](https://docs.github.com/en/rest)
 
 mod app;
+mod commit;
 mod installation;
 mod issue;
 mod pagination;
@@ -274,6 +275,9 @@ use crate::auth::{AuthenticationProvider, Installation, InstallationId};
 use crate::error::ApiError;
 
 pub use app::App;
+pub use commit::{
+    CommitDetails, CommitReference, Comparison, FileChange, FullCommit, GitSignature, Verification,
+};
 pub use installation::InstallationClient;
 pub use issue::{
     Comment, CreateCommentRequest, CreateIssueRequest, CreateLabelRequest, Issue, IssueUser, Label,

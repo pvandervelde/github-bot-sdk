@@ -281,7 +281,8 @@ mod deserialization {
             "html_url": "https://github.com/o/r/compare/sha_base...sha_head",
             "permalink_url": "https://github.com/o/r/compare/sha_base...sha_head",
             "diff_url": "https://github.com/o/r/compare/sha_base...sha_head.diff",
-            "patch_url": "https://github.com/o/r/compare/sha_base...sha_head.patch"
+            "patch_url": "https://github.com/o/r/compare/sha_base...sha_head.patch",
+            "url": "https://api.github.com/repos/o/r/compare/sha_base...sha_head"
         });
 
         let cmp: Comparison = serde_json::from_value(json).unwrap();
@@ -298,6 +299,10 @@ mod deserialization {
         assert_eq!(cmp.files[0].filename, "src/lib.rs");
         assert_eq!(cmp.files[0].additions, 10);
         assert!(cmp.files[0].patch.is_some());
+        assert_eq!(
+            cmp.url,
+            "https://api.github.com/repos/o/r/compare/sha_base...sha_head"
+        );
     }
 
     /// Deserialize a FileChange for a renamed file (previous_filename present).
@@ -449,7 +454,56 @@ mod commit_operations {
         assert_eq!(result.unwrap().sha, "tagsha");
     }
 
-    /// get_commit returns ApiError::NotFound for a 404 response.
+    /// get_commit URL-encodes the ref_name so branch names with slashes are
+    /// transmitted as a single path segment.
+    #[tokio::test]
+    async fn test_get_commit_url_encodes_ref_name() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        // refs/heads/feature/x → refs%2Fheads%2Ffeature%2Fx
+        Mock::given(method("GET"))
+            .and(path(
+                "/repos/octocat/Hello-World/commits/refs%2Fheads%2Ffeature%2Fx",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(full_commit_json("encsha")))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .get_commit("octocat", "Hello-World", "refs/heads/feature/x")
+            .await;
+
+        assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
+        assert_eq!(result.unwrap().sha, "encsha");
+    }
+
+    /// get_commit returns ApiError::InvalidRequest for a 422 response.
+    #[tokio::test]
+    async fn test_get_commit_422_returns_invalid_request() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"/repos/octocat/Hello-World/commits/.*"))
+            .respond_with(ResponseTemplate::new(422).set_body_json(serde_json::json!({
+                "message": "No commit found for SHA: invalidref"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .get_commit("octocat", "Hello-World", "invalidref")
+            .await;
+
+        assert!(
+            matches!(result, Err(ApiError::InvalidRequest { .. })),
+            "Expected InvalidRequest, got: {:?}",
+            result
+        );
+    }
     #[tokio::test]
     async fn test_get_commit_404_returns_not_found() {
         let mock_server = MockServer::start().await;
@@ -808,6 +862,106 @@ mod commit_operations {
         assert!(matches!(result, Err(ApiError::NotFound)));
     }
 
+    /// list_commits returns ApiError::AuthorizationFailed for a 403 response.
+    #[tokio::test]
+    async fn test_list_commits_403_returns_authorization_failed() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/commits"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "message": "Forbidden"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .list_commits(
+                "octocat",
+                "Hello-World",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await;
+
+        assert!(matches!(result, Err(ApiError::AuthorizationFailed)));
+    }
+
+    /// list_commits returns ApiError::AuthenticationFailed for a 401 response.
+    #[tokio::test]
+    async fn test_list_commits_401_returns_authentication_failed() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/commits"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+                "message": "Requires authentication"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .list_commits(
+                "octocat",
+                "Hello-World",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await;
+
+        assert!(matches!(result, Err(ApiError::AuthenticationFailed)));
+    }
+
+    /// list_commits with per_page=0 clamps the value to 1, not 0.
+    #[tokio::test]
+    async fn test_list_commits_per_page_zero_clamped_to_one() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        // The mock only matches when per_page is exactly "1" (clamped from 0)
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/commits"))
+            .and(query_param("per_page", "1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .list_commits(
+                "octocat",
+                "Hello-World",
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(0),
+                None,
+            )
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "Expected Ok after clamping 0 to 1, got: {:?}",
+            result
+        );
+    }
+
     /// list_commits with a sha filter passes the `sha` query parameter.
     #[tokio::test]
     async fn test_list_commits_sha_filter() {
@@ -889,7 +1043,8 @@ mod commit_operations {
             "html_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.1.0",
             "permalink_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.1.0",
             "diff_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.1.0.diff",
-            "patch_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.1.0.patch"
+            "patch_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.1.0.patch",
+            "url": "https://api.github.com/repos/octocat/Hello-World/compare/v1.0.0...v1.1.0"
         });
 
         Mock::given(method("GET"))
@@ -913,6 +1068,10 @@ mod commit_operations {
         assert_eq!(cmp.commits.len(), 5);
         assert_eq!(cmp.files.len(), 1);
         assert_eq!(cmp.files[0].filename, "src/main.rs");
+        assert_eq!(
+            cmp.url,
+            "https://api.github.com/repos/octocat/Hello-World/compare/v1.0.0...v1.1.0"
+        );
     }
 
     /// compare_commits with identical refs returns "identical" status.
@@ -939,7 +1098,8 @@ mod commit_operations {
             "html_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.0.0",
             "permalink_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.0.0",
             "diff_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.0.0.diff",
-            "patch_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.0.0.patch"
+            "patch_url": "https://github.com/octocat/Hello-World/compare/v1.0.0...v1.0.0.patch",
+            "url": "https://api.github.com/repos/octocat/Hello-World/compare/v1.0.0...v1.0.0"
         });
 
         Mock::given(method("GET"))
@@ -1019,7 +1179,8 @@ mod commit_operations {
             "html_url": "https://github.com/octocat/Hello-World/compare/base...head",
             "permalink_url": "https://github.com/octocat/Hello-World/compare/base...head",
             "diff_url": "https://github.com/octocat/Hello-World/compare/base...head.diff",
-            "patch_url": "https://github.com/octocat/Hello-World/compare/base...head.patch"
+            "patch_url": "https://github.com/octocat/Hello-World/compare/base...head.patch",
+            "url": "https://api.github.com/repos/octocat/Hello-World/compare/base...head"
         });
 
         Mock::given(method("GET"))
@@ -1094,6 +1255,28 @@ mod commit_operations {
             .await;
 
         assert!(matches!(result, Err(ApiError::AuthorizationFailed)));
+    }
+
+    /// compare_commits returns ApiError::AuthenticationFailed for a 401 response.
+    #[tokio::test]
+    async fn test_compare_commits_401_returns_authentication_failed() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"/repos/octocat/Hello-World/compare/.*"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({
+                "message": "Requires authentication"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .compare_commits("octocat", "Hello-World", "base", "head")
+            .await;
+
+        assert!(matches!(result, Err(ApiError::AuthenticationFailed)));
     }
 
     // -------------------------------------------------------------------------

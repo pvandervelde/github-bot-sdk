@@ -58,7 +58,11 @@ pub struct FullCommit {
     /// Web interface URL for this commit.
     pub html_url: String,
 
-    /// Number of comments on this commit.
+    /// Number of comments on this commit (GitHub-level, at the commit envelope).
+    ///
+    /// The GitHub API returns this field at both the `FullCommit` level and inside
+    /// [`CommitDetails`]. Both values are preserved here because the API response
+    /// contains the count at each level of the object.
     pub comment_count: u32,
 }
 
@@ -98,7 +102,11 @@ pub struct CommitDetails {
     /// `None` when the GitHub API does not include verification data.
     pub verification: Option<Verification>,
 
-    /// Number of comments on this commit.
+    /// Number of comments on this commit (Git-object level).
+    ///
+    /// The GitHub API returns this field at both the [`CommitDetails`] level and on
+    /// the outer [`FullCommit`] envelope. Both values are preserved because the
+    /// API response contains the count at each level of the object.
     pub comment_count: u32,
 }
 
@@ -259,6 +267,9 @@ pub struct Comparison {
 
     /// URL for the patch view.
     pub patch_url: String,
+
+    /// API URL for this comparison (machine-readable endpoint).
+    pub url: String,
 }
 
 /// A single file change within a [`Comparison`].
@@ -351,6 +362,7 @@ impl InstallationClient {
     /// # Errors
     ///
     /// * [`ApiError::NotFound`] - Commit or ref doesn't exist, or repository not found
+    /// * [`ApiError::InvalidRequest`] - Invalid ref syntax or empty repository (GitHub returns 422)
     /// * [`ApiError::AuthorizationFailed`] - Missing `contents:read` permission
     /// * [`ApiError::AuthenticationFailed`] - Token expired or invalid
     /// * [`ApiError::HttpError`] - Unexpected API response
@@ -386,13 +398,25 @@ impl InstallationClient {
         repo: &str,
         ref_name: &str,
     ) -> Result<FullCommit, ApiError> {
-        let path = format!("/repos/{}/{}/commits/{}", owner, repo, ref_name);
+        let path = format!(
+            "/repos/{}/{}/commits/{}",
+            owner,
+            repo,
+            urlencoding::encode(ref_name)
+        );
         let response = self.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
             return Err(match status.as_u16() {
                 404 => ApiError::NotFound,
+                422 => {
+                    let message = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Invalid request".to_string());
+                    ApiError::InvalidRequest { message }
+                }
                 403 => ApiError::AuthorizationFailed,
                 401 => ApiError::AuthenticationFailed,
                 _ => {
@@ -425,7 +449,7 @@ impl InstallationClient {
     /// * `author` - Filter by GitHub username or commit author email address
     /// * `since` - Only include commits after this timestamp (inclusive)
     /// * `until` - Only include commits before this timestamp (inclusive)
-    /// * `per_page` - Number of results per page; clamped to a maximum of 100
+    /// * `per_page` - Number of results per page; clamped to the range 1..=100
     /// * `page` - Page number for pagination (1-based, default: 1)
     ///
     /// # Returns
@@ -476,7 +500,7 @@ impl InstallationClient {
     ///
     /// # Notes
     ///
-    /// - `per_page` is silently clamped to 100 (GitHub API maximum).
+    /// - `per_page` is silently clamped to the range 1..=100 (GitHub API maximum is 100; 0 is raised to 1).
     /// - Empty repositories cause GitHub to return 422, mapped to [`ApiError::InvalidRequest`].
     ///
     /// # GitHub API
@@ -516,7 +540,7 @@ impl InstallationClient {
             query_params.push(format!("until={}", urlencoding::encode(&u.to_rfc3339())));
         }
         if let Some(pp) = per_page {
-            let clamped = pp.min(100);
+            let clamped = pp.clamp(1, 100);
             query_params.push(format!("per_page={}", clamped));
         }
         if let Some(pg) = page {

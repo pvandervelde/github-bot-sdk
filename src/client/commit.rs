@@ -405,33 +405,6 @@ impl InstallationClient {
             urlencoding::encode(ref_name)
         );
         let response = self.get(&path).await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            return Err(match status.as_u16() {
-                404 => ApiError::NotFound,
-                422 => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Invalid request".to_string());
-                    ApiError::InvalidRequest { message }
-                }
-                403 => ApiError::AuthorizationFailed,
-                401 => ApiError::AuthenticationFailed,
-                _ => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Unknown error".to_string());
-                    ApiError::HttpError {
-                        status: status.as_u16(),
-                        message,
-                    }
-                }
-            });
-        }
-
         response.json().await.map_err(ApiError::from)
     }
 
@@ -554,33 +527,6 @@ impl InstallationClient {
         };
 
         let response = self.get(&request_path).await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            return Err(match status.as_u16() {
-                404 => ApiError::NotFound,
-                422 => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Git Repository is empty".to_string());
-                    ApiError::InvalidRequest { message }
-                }
-                403 => ApiError::AuthorizationFailed,
-                401 => ApiError::AuthenticationFailed,
-                _ => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Unknown error".to_string());
-                    ApiError::HttpError {
-                        status: status.as_u16(),
-                        message,
-                    }
-                }
-            });
-        }
-
         response.json().await.map_err(ApiError::from)
     }
 
@@ -605,6 +551,7 @@ impl InstallationClient {
     ///
     /// * [`ApiError::NotFound`] - Base or head ref not found, or repository not found
     /// * [`ApiError::AuthorizationFailed`] - Missing `contents:read` permission
+    /// * [`ApiError::AuthenticationFailed`] - Token expired or invalid
     /// * [`ApiError::HttpError`] - Unexpected API response
     ///
     /// # Examples
@@ -672,26 +619,6 @@ impl InstallationClient {
             urlencoding::encode(head)
         );
         let response = self.get(&path).await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            return Err(match status.as_u16() {
-                404 => ApiError::NotFound,
-                403 => ApiError::AuthorizationFailed,
-                401 => ApiError::AuthenticationFailed,
-                _ => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Unknown error".to_string());
-                    ApiError::HttpError {
-                        status: status.as_u16(),
-                        message,
-                    }
-                }
-            });
-        }
-
         response.json().await.map_err(ApiError::from)
     }
 }

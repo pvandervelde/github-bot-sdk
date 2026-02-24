@@ -565,6 +565,27 @@ mod commit_operations {
         assert!(matches!(result, Err(ApiError::AuthenticationFailed)));
     }
 
+    /// get_commit returns ApiError::HttpError for unexpected server errors (5xx).
+    #[tokio::test]
+    async fn test_get_commit_server_error() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"/repos/octocat/Hello-World/commits/.*"))
+            .respond_with(ResponseTemplate::new(503).set_body_string("Service Unavailable"))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client.get_commit("octocat", "Hello-World", "sha1").await;
+
+        match result.unwrap_err() {
+            ApiError::HttpError { status, .. } => assert_eq!(status, 503),
+            e => panic!("Expected HttpError, got: {:?}", e),
+        }
+    }
+
     // -------------------------------------------------------------------------
     // list_commits
     // -------------------------------------------------------------------------
@@ -926,6 +947,39 @@ mod commit_operations {
         assert!(matches!(result, Err(ApiError::AuthenticationFailed)));
     }
 
+    /// list_commits returns ApiError::HttpError for unexpected server errors (5xx).
+    #[tokio::test]
+    async fn test_list_commits_server_error() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/commits"))
+            .respond_with(ResponseTemplate::new(503).set_body_string("Service Unavailable"))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .list_commits(
+                "octocat",
+                "Hello-World",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await;
+
+        match result.unwrap_err() {
+            ApiError::HttpError { status, .. } => assert_eq!(status, 503),
+            e => panic!("Expected HttpError, got: {:?}", e),
+        }
+    }
+
     /// list_commits with per_page=0 clamps the value to 1, not 0.
     #[tokio::test]
     async fn test_list_commits_per_page_zero_clamped_to_one() {
@@ -995,6 +1049,41 @@ mod commit_operations {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap()[0].sha, "branchsha");
+    }
+
+    /// list_commits with a page number sends the correct page query parameter.
+    #[tokio::test]
+    async fn test_list_commits_page_parameter() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/commits"))
+            .and(query_param("page", "3"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([full_commit_json("pagesha")])),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .list_commits(
+                "octocat",
+                "Hello-World",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(3),
+            )
+            .await;
+
+        assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
+        assert_eq!(result.unwrap()[0].sha, "pagesha");
     }
 
     // -------------------------------------------------------------------------
@@ -1277,6 +1366,29 @@ mod commit_operations {
             .await;
 
         assert!(matches!(result, Err(ApiError::AuthenticationFailed)));
+    }
+
+    /// compare_commits returns ApiError::HttpError for unexpected server errors (5xx).
+    #[tokio::test]
+    async fn test_compare_commits_server_error() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"/repos/octocat/Hello-World/compare/.*"))
+            .respond_with(ResponseTemplate::new(503).set_body_string("Service Unavailable"))
+            .mount(&mock_server)
+            .await;
+
+        let client = build_client(test_token, &mock_server.uri()).await;
+        let result = client
+            .compare_commits("octocat", "Hello-World", "base", "head")
+            .await;
+
+        match result.unwrap_err() {
+            ApiError::HttpError { status, .. } => assert_eq!(status, 503),
+            e => panic!("Expected HttpError, got: {:?}", e),
+        }
     }
 
     // -------------------------------------------------------------------------

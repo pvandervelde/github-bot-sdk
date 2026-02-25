@@ -118,6 +118,32 @@ pub struct CreateReleaseRequest {
     /// Whether to mark as prerelease
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prerelease: Option<bool>,
+
+    /// Whether to automatically generate the name and body for this release.
+    ///
+    /// When set to `true`, GitHub will auto-generate the release name (if `name`
+    /// is not provided) and the release notes body from merged pull requests and
+    /// other repository activity since the previous release. If `name` is provided
+    /// it is used as-is; if `body` is provided it is pre-pended to the generated
+    /// notes. Defaults to `false`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use github_bot_sdk::client::release::CreateReleaseRequest;
+    ///
+    /// let request = CreateReleaseRequest {
+    ///     tag_name: "v1.2.0".to_string(),
+    ///     target_commitish: None,
+    ///     name: None,
+    ///     body: None,
+    ///     draft: None,
+    ///     prerelease: None,
+    ///     generate_release_notes: Some(true),
+    /// };
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generate_release_notes: Option<bool>,
 }
 
 /// Request to update a release.

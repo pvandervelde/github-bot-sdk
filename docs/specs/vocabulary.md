@@ -291,4 +291,63 @@ Quantitative measurements of SDK operations and performance.
 - **Histograms**: Request latency, token refresh time, payload size
 - **Labels**: GitHub organization, repository, operation type for filtering
 
+## Commit and Repository History Concepts
+
+### Commit
+
+A single point in a repository's history representing a snapshot of the codebase at a specific time.
+
+- **SHA**: 40-character hexadecimal Git hash uniquely identifying the commit
+- **Node ID**: GraphQL API identifier for the commit
+- **Author**: Git signature (name, email, date) from Git config of who wrote the code
+- **Committer**: Git signature of who applied the commit (may differ from author)
+- **Message**: Full commit message with subject and body
+- **Parents**: List of parent commits (0 for initial, 1 for normal, 2+ for merge)
+- **Tree**: SHA of directory snapshot at this commit
+- **Verification**: GPG signature verification status (if signed)
+
+### Comparison
+
+The result of comparing two commits, branches, or tags to determine what changed between them.
+
+- **Base**: Starting point for comparison (older ref)
+- **Head**: Ending point for comparison (newer ref)
+- **Merge Base**: Most recent common ancestor of base and head
+- **Status**: Relationship between refs (`ahead`, `behind`, `identical`, `diverged`)
+- **Commits**: All commits from base to head in chronological order
+- **Files**: All changed files with addition/deletion statistics
+- **Use Cases**: Changelog generation, release notes, version comparison
+
+### File Change
+
+A description of how a single file changed in a comparison.
+
+- **Filename**: Current path of the file in the repository
+- **Status**: Type of change (`added`, `removed`, `modified`, `renamed`, `copied`)
+- **Additions**: Number of lines added
+- **Deletions**: Number of lines removed
+- **Changes**: Total lines changed (additions + deletions)
+- **Previous Filename**: Original path if file was renamed
+- **Patch**: Unified diff showing exact changes (may be truncated for large diffs)
+
+### Git Signature
+
+An identity record in Git representing who performed an action and when.
+
+- **Name**: From Git config `user.name`
+- **Email**: From Git config `user.email`
+- **Date**: Timestamp when action occurred
+- **GitHub Association**: If email matches a GitHub user, parent Commit includes user object
+- **Use Cases**: Distinguishing author from committer, audit trails, contributor attribution
+
+### Verification
+
+The status of a commit's GPG signature validation.
+
+- **Verified**: Boolean indicating if signature is valid
+- **Reason**: Why verified/unverified (`valid`, `invalid`, `expired_key`, `unknown_key`, `unsigned`)
+- **Signature**: GPG signature payload (if present)
+- **Payload**: Signed content (if present)
+- **Use Cases**: Security compliance, audit trails, trust verification
+
 This vocabulary establishes the shared language for github-bot-sdk architecture and implementation, ensuring consistent terminology across all bot implementations and GitHub integrations.

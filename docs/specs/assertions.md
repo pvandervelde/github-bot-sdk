@@ -419,3 +419,147 @@ This document defines testable behavioral assertions for the GitHub Bot SDK. The
 - No unbounded cache growth
 - Connection pools respect size limits
 - Long-running operations don't accumulate memory
+
+## Commit Operations Assertions
+
+### Assertion 28: Get Commit by SHA Returns Full Details
+
+**Given**: Valid repository with known commit SHA
+**When**: `get_commit(owner, repo, sha)` is called
+**Then**: Returns `Ok(Commit)` with complete details
+**And**: Commit contains author/committer signatures
+**And**: Commit contains message and parent references
+**And**: Commit has correct SHA matching request
+
+**Test Criteria**:
+
+- SHA matches requested value
+- Commit message is non-empty
+- Author and committer signatures present
+- Parent commits array exists (may be empty for initial commit)
+- HTML URL is valid
+
+### Assertion 29: Get Commit by Branch Resolves to HEAD
+
+**Given**: Repository with branch "main" at commit "abc123"
+**When**: `get_commit(owner, repo, "main")` is called
+**Then**: Returns commit for branch HEAD
+**And**: Commit SHA is "abc123"
+**And**: Same result as calling with SHA directly
+
+**Test Criteria**:
+
+- Branch name resolves to current HEAD commit
+- Result matches direct SHA lookup
+
+### Assertion 30: Get Non-Existent Commit Returns NotFound
+
+**Given**: Valid repository
+**When**: `get_commit(owner, repo, "nonexistent-sha")` is called
+**Then**: Returns `Err(ApiError::NotFound)`
+**And**: Error includes context for debugging
+**And**: No authentication tokens in error
+
+**Test Criteria**:
+
+- Error type is NotFound
+- Error message provides context
+- No sensitive data leaked
+
+### Assertion 31: List Commits Returns Chronological Order
+
+**Given**: Repository with multiple commits
+**When**: `list_commits(owner, repo, None, None, ...)` is called
+**Then**: Returns commits in reverse chronological order (newest first)
+**And**: Each commit is newer than the next in array
+**And**: Maximum 30 commits returned (default page size)
+
+**Test Criteria**:
+
+- Commits sorted by date descending
+- Dates verified in order
+- Default pagination applied
+
+### Assertion 32: List Commits with Path Filter Shows Only Relevant Commits
+
+**Given**: Repository where 10 commits modified "README.md" out of 100 total
+**When**: `list_commits(owner, repo, None, Some("README.md"), ...)` is called
+**Then**: Returns approximately 10 commits (not 100)
+**And**: Each commit modified the specified path
+
+**Test Criteria**:
+
+- Result count much less than total commits
+- Path filter applied correctly
+
+### Assertion 33: Compare Identical Refs Returns Identical Status
+
+**Given**: Tag "v1.0.0" pointing to specific commit
+**When**: `compare_commits(owner, repo, "v1.0.0", "v1.0.0")` is called
+**Then**: Returns comparison with status "identical"
+**And**: ahead_by = 0, behind_by = 0
+**And**: Commits array is empty
+**And**: Files array is empty
+
+**Test Criteria**:
+
+- Status is "identical"
+- No commits in result
+- No file changes
+
+### Assertion 34: Compare Tags Shows Commits Between Releases
+
+**Given**: Tag "v1.0.0" is 5 commits behind "v1.1.0"
+**When**: `compare_commits(owner, repo, "v1.0.0", "v1.1.0")` is called
+**Then**: Returns comparison with status "ahead"
+**And**: ahead_by = 5, total_commits = 5
+**And**: Commits array has 5 commits in chronological order
+**And**: Files array shows all changed files
+
+**Test Criteria**:
+
+- Correct commit count
+- Commits in order
+- File changes included
+- Status correctly shows "ahead"
+
+### Assertion 35: Comparison Includes File Changes with Statistics
+
+**Given**: Comparison between two refs with file changes
+**When**: `compare_commits(owner, repo, base, head)` is called
+**Then**: Files array includes all changed files
+**And**: Each file has status (added/removed/modified/renamed)
+**And**: Each file has additions/deletions counts
+**And**: Renamed files include previous_filename
+
+**Test Criteria**:
+
+- All file statuses present
+- Addition/deletion counts accurate
+- Renamed files properly marked
+
+### Assertion 36: List Commits on Empty Repository Returns InvalidRequest
+
+**Given**: Newly created repository with no commits
+**When**: `list_commits(owner, repo, ...)` is called
+**Then**: Returns `Err(ApiError::InvalidRequest)`
+**And**: GitHub API returns 422 status
+
+**Test Criteria**:
+
+- Error type is InvalidRequest
+- Handles empty repository gracefully
+
+### Assertion 37: Commit Operations Complete Within Performance Targets
+
+**Given**: Normal network conditions
+**When**: Commit operations are called
+**Then**: get_commit completes in <200ms (p95)
+**And**: list_commits completes in <500ms (p95)
+**And**: compare_commits completes in <1000ms (p95)
+
+**Test Criteria**:
+
+- Performance targets met
+- Single API call per operation
+- No redundant requests

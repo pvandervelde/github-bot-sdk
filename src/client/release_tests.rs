@@ -26,6 +26,7 @@ mod construction {
             body: None,
             draft: None,
             prerelease: None,
+            generate_release_notes: None,
         };
 
         assert_eq!(request.tag_name, "v1.0.0");
@@ -42,6 +43,7 @@ mod construction {
         assert!(json.get("target_commitish").is_none());
         assert!(json.get("name").is_none());
         assert!(json.get("body").is_none());
+        assert!(json.get("generate_release_notes").is_none());
     }
 
     /// Verify CreateReleaseRequest with all fields populated.
@@ -56,6 +58,7 @@ mod construction {
             body: Some("Full release notes".to_string()),
             draft: Some(true),
             prerelease: Some(false),
+            generate_release_notes: Some(true),
         };
 
         assert_eq!(request.tag_name, "v2.0.0");
@@ -73,6 +76,59 @@ mod construction {
         assert_eq!(json["body"], "Full release notes");
         assert_eq!(json["draft"], true);
         assert_eq!(json["prerelease"], false);
+        assert_eq!(json["generate_release_notes"], true);
+    }
+
+    /// Verify CreateReleaseRequest serializes generate_release_notes: Some(true) as true.
+    ///
+    /// When generate_release_notes is Some(true), GitHub auto-generates release name and body.
+    #[test]
+    fn test_create_release_request_with_generate_notes() {
+        let request_true = CreateReleaseRequest {
+            tag_name: "v1.1.0".to_string(),
+            target_commitish: None,
+            name: None,
+            body: None,
+            draft: None,
+            prerelease: None,
+            generate_release_notes: Some(true),
+        };
+
+        let json_true = serde_json::to_value(&request_true).unwrap();
+        assert_eq!(json_true["generate_release_notes"], true);
+
+        let request_false = CreateReleaseRequest {
+            tag_name: "v1.1.0".to_string(),
+            target_commitish: None,
+            name: None,
+            body: None,
+            draft: None,
+            prerelease: None,
+            generate_release_notes: Some(false),
+        };
+
+        let json_false = serde_json::to_value(&request_false).unwrap();
+        assert_eq!(json_false["generate_release_notes"], false);
+    }
+
+    /// Verify CreateReleaseRequest omits generate_release_notes from JSON when None.
+    ///
+    /// When generate_release_notes is None, the field must be absent from serialized JSON
+    /// so that the GitHub API applies its own default (false) without explicit override.
+    #[test]
+    fn test_create_release_request_without_generate_notes() {
+        let request = CreateReleaseRequest {
+            tag_name: "v1.1.0".to_string(),
+            target_commitish: None,
+            name: None,
+            body: None,
+            draft: None,
+            prerelease: None,
+            generate_release_notes: None,
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+        assert!(json.get("generate_release_notes").is_none());
     }
 
     /// Verify UpdateReleaseRequest with selective field updates.
@@ -511,6 +567,7 @@ mod release_operations {
             body: Some("Description of the release".to_string()),
             draft: None,
             prerelease: None,
+            generate_release_notes: None,
         };
 
         let result = client
@@ -579,6 +636,7 @@ mod release_operations {
             body: Some("Draft release".to_string()),
             draft: Some(true),
             prerelease: None,
+            generate_release_notes: None,
         };
 
         let result = client
@@ -647,6 +705,7 @@ mod release_operations {
             body: Some("Beta release".to_string()),
             draft: None,
             prerelease: Some(true),
+            generate_release_notes: None,
         };
 
         let result = client
@@ -894,6 +953,7 @@ mod serialization {
             body: Some("Release notes".to_string()),
             draft: Some(false),
             prerelease: Some(false),
+            generate_release_notes: None,
         };
 
         let json = serde_json::to_value(&request).unwrap();
@@ -1018,6 +1078,7 @@ mod error_handling {
             body: None,
             draft: None,
             prerelease: None,
+            generate_release_notes: None,
         };
 
         let result = client

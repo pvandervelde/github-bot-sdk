@@ -434,6 +434,7 @@ impl InstallationClient {
     /// * [`ApiError::NotFound`] - Repository not found
     /// * [`ApiError::InvalidRequest`] - Repository is empty (GitHub returns 422)
     /// * [`ApiError::AuthorizationFailed`] - Missing `contents:read` permission
+    /// * [`ApiError::AuthenticationFailed`] - Token expired or invalid
     /// * [`ApiError::HttpError`] - Unexpected API response
     ///
     /// # Examples

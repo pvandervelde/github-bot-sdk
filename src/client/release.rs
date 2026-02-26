@@ -130,7 +130,7 @@ pub struct CreateReleaseRequest {
     /// # Example
     ///
     /// ```
-    /// use github_bot_sdk::client::release::CreateReleaseRequest;
+    /// use github_bot_sdk::client::CreateReleaseRequest;
     ///
     /// let request = CreateReleaseRequest {
     ///     tag_name: "v1.2.0".to_string(),
@@ -147,6 +147,10 @@ pub struct CreateReleaseRequest {
 }
 
 /// Request to update a release.
+///
+/// Note: `generate_release_notes` is intentionally absent from this type.
+/// The GitHub Update Release endpoint does not accept that parameter — it is
+/// only valid on the Create Release endpoint.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct UpdateReleaseRequest {
     /// Tag name
@@ -442,6 +446,7 @@ impl InstallationClient {
     ///     draft: Some(false),
     ///     prerelease: Some(false),
     ///     target_commitish: None,
+    ///     generate_release_notes: None,
     /// };
     /// let release = client.create_release("owner", "repo", request).await?;
     /// println!("Created release: {}", release.tag_name);

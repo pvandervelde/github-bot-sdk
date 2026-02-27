@@ -30,6 +30,7 @@ mod construction {
             body: None,
             draft: None,
             milestone: None,
+            maintainer_can_modify: None,
         };
 
         assert_eq!(request.title, "Test PR");
@@ -39,26 +40,83 @@ mod construction {
         assert!(request.draft.is_none());
     }
 
-    /// Verify CreatePullRequestRequest with all fields.
+    /// Verify CreatePullRequestRequest with all fields populated.
     ///
-    /// Ensures PR creation request supports optional fields.
+    /// Ensures PR creation request supports all optional fields, including
+    /// maintainer_can_modify for fork-sourced pull requests.
     #[test]
     fn test_create_pull_request_request_full() {
         let request = CreatePullRequestRequest {
             title: "Test PR".to_string(),
-            head: "feature-branch".to_string(),
+            head: "contributor:feature-branch".to_string(),
             base: "main".to_string(),
             body: Some("Detailed description".to_string()),
             draft: Some(true),
             milestone: Some(5),
+            maintainer_can_modify: Some(true),
         };
 
         assert_eq!(request.title, "Test PR");
-        assert_eq!(request.head, "feature-branch");
+        assert_eq!(request.head, "contributor:feature-branch");
         assert_eq!(request.base, "main");
         assert_eq!(request.body, Some("Detailed description".to_string()));
         assert_eq!(request.draft, Some(true));
         assert_eq!(request.milestone, Some(5));
+        assert_eq!(request.maintainer_can_modify, Some(true));
+    }
+
+    /// Verify CreatePullRequestRequest serializes maintainer_can_modify as boolean when Some.
+    ///
+    /// When maintainer_can_modify is Some(true) or Some(false), the field must be
+    /// present in JSON with the correct boolean value so GitHub respects the caller's
+    /// explicit preference.
+    #[test]
+    fn test_create_pr_request_with_maintainer_modify() {
+        let request_true = CreatePullRequestRequest {
+            title: "Test PR".to_string(),
+            head: "contributor:feature".to_string(),
+            base: "main".to_string(),
+            body: None,
+            draft: None,
+            milestone: None,
+            maintainer_can_modify: Some(true),
+        };
+
+        let json_true = serde_json::to_value(&request_true).unwrap();
+        assert_eq!(json_true["maintainer_can_modify"], true);
+
+        let request_false = CreatePullRequestRequest {
+            title: "Test PR".to_string(),
+            head: "contributor:feature".to_string(),
+            base: "main".to_string(),
+            body: None,
+            draft: None,
+            milestone: None,
+            maintainer_can_modify: Some(false),
+        };
+
+        let json_false = serde_json::to_value(&request_false).unwrap();
+        assert_eq!(json_false["maintainer_can_modify"], false);
+    }
+
+    /// Verify CreatePullRequestRequest omits maintainer_can_modify from JSON when None.
+    ///
+    /// When maintainer_can_modify is None, the field must be absent from serialized
+    /// JSON so that the GitHub API applies its own default without explicit override.
+    #[test]
+    fn test_create_pr_request_without_maintainer_modify() {
+        let request = CreatePullRequestRequest {
+            title: "Test PR".to_string(),
+            head: "feature-branch".to_string(),
+            base: "main".to_string(),
+            body: None,
+            draft: None,
+            milestone: None,
+            maintainer_can_modify: None,
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+        assert!(json.get("maintainer_can_modify").is_none());
     }
 
     /// Verify UpdatePullRequestRequest with selective updates.
@@ -375,6 +433,7 @@ mod pull_request_operations {
             body: Some("Feature description".to_string()),
             draft: None,
             milestone: None,
+            maintainer_can_modify: None,
         };
 
         let pr = client

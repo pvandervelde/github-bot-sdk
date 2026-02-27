@@ -194,6 +194,31 @@ pub struct CreatePullRequestRequest {
     /// Milestone number
     #[serde(skip_serializing_if = "Option::is_none")]
     pub milestone: Option<u64>,
+
+    /// Whether maintainers of the base repository can push to the head branch.
+    ///
+    /// When `true`, maintainers of the base repository (contributors with push
+    /// access) can push commits to the head branch of this pull request, even
+    /// when the head branch lives in a fork. Defaults to `true` on the GitHub
+    /// API for fork-sourced pull requests when not provided.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use github_bot_sdk::client::CreatePullRequestRequest;
+    ///
+    /// let request = CreatePullRequestRequest {
+    ///     title: "My feature".to_string(),
+    ///     head: "contributor:feature-branch".to_string(),
+    ///     base: "main".to_string(),
+    ///     body: None,
+    ///     draft: None,
+    ///     milestone: None,
+    ///     maintainer_can_modify: Some(true),
+    /// };
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maintainer_can_modify: Option<bool>,
 }
 
 /// Request to update an existing pull request.

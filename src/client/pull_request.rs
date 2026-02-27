@@ -199,8 +199,8 @@ pub struct CreatePullRequestRequest {
     ///
     /// When `true`, maintainers of the base repository (contributors with push
     /// access) can push commits to the head branch of this pull request, even
-    /// when the head branch lives in a fork. Defaults to `false` when not
-    /// provided.
+    /// when the head branch lives in a fork. Defaults to `true` on the GitHub
+    /// API for fork-sourced pull requests when not provided.
     ///
     /// # Example
     ///

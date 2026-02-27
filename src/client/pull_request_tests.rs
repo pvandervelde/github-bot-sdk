@@ -40,27 +40,29 @@ mod construction {
         assert!(request.draft.is_none());
     }
 
-    /// Verify CreatePullRequestRequest with all fields.
+    /// Verify CreatePullRequestRequest with all fields populated.
     ///
-    /// Ensures PR creation request supports optional fields.
+    /// Ensures PR creation request supports all optional fields, including
+    /// maintainer_can_modify for fork-sourced pull requests.
     #[test]
     fn test_create_pull_request_request_full() {
         let request = CreatePullRequestRequest {
             title: "Test PR".to_string(),
-            head: "feature-branch".to_string(),
+            head: "contributor:feature-branch".to_string(),
             base: "main".to_string(),
             body: Some("Detailed description".to_string()),
             draft: Some(true),
             milestone: Some(5),
-            maintainer_can_modify: None,
+            maintainer_can_modify: Some(true),
         };
 
         assert_eq!(request.title, "Test PR");
-        assert_eq!(request.head, "feature-branch");
+        assert_eq!(request.head, "contributor:feature-branch");
         assert_eq!(request.base, "main");
         assert_eq!(request.body, Some("Detailed description".to_string()));
         assert_eq!(request.draft, Some(true));
         assert_eq!(request.milestone, Some(5));
+        assert_eq!(request.maintainer_can_modify, Some(true));
     }
 
     /// Verify CreatePullRequestRequest serializes maintainer_can_modify as boolean when Some.

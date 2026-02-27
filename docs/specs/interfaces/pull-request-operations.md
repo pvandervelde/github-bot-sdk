@@ -457,6 +457,12 @@ pub struct CreatePullRequestRequest {
     pub body: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub draft: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub milestone: Option<u64>,
+    /// Whether maintainers of the base repository can push to the head branch.
+    /// Defaults to `true` on the GitHub API for fork-sourced pull requests.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maintainer_can_modify: Option<bool>,
 }
 ```
 

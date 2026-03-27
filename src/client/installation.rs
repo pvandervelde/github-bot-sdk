@@ -414,6 +414,40 @@ impl InstallationClient {
         .await
     }
 
+    /// Make an authenticated POST request to the GitHub GraphQL API.
+    ///
+    /// GitHub's GraphQL endpoint always returns HTTP 200 even for errors.
+    /// Application-level errors are detected by checking the `.errors`
+    /// array in the response body; the first error message is surfaced as
+    /// `ApiError::GraphQlError`. On success, the `.data` value is returned.
+    ///
+    /// Retry logic (backoff, 5xx, rate-limit handling) is identical to the
+    /// REST helpers because the transport layer is the same.
+    ///
+    /// # Arguments
+    ///
+    /// * `query`     - GraphQL query or mutation string
+    /// * `variables` - Variables object (serialised to JSON)
+    ///
+    /// # Returns
+    ///
+    /// Returns the `data` field from the GraphQL response as a `serde_json::Value`.
+    ///
+    /// # Errors
+    ///
+    /// - `ApiError::GraphQlError` — GitHub returned `.errors` in the body
+    /// - `ApiError::AuthenticationFailed` — HTTP 401
+    /// - `ApiError::JsonError` — response body could not be parsed
+    /// - Any other `ApiError` variant for HTTP-level failures
+    pub async fn post_graphql<V: serde::Serialize>(
+        &self,
+        query: &str,
+        variables: V,
+    ) -> Result<serde_json::Value, ApiError> {
+        let _ = (query, variables); // stub — implementation in phase 2
+        unimplemented!("post_graphql: see task 1.2")
+    }
+
     /// Make an authenticated PATCH request to the GitHub API.
     ///
     /// Includes automatic retry logic for transient errors.

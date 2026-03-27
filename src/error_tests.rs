@@ -174,6 +174,18 @@ fn test_validation_error_messages() {
     );
 }
 
+/// Verify that ApiError::GraphQlError is classified as non-transient.
+///
+/// GraphQL errors represent logic errors in the query or variables and
+/// will not succeed on retry — they are non-retryable.
+#[test]
+fn test_graphql_error_is_not_transient() {
+    assert!(!ApiError::GraphQlError {
+        message: "Field does not exist on type".to_string()
+    }
+    .is_transient());
+}
+
 /// Verify that `should_retry()` is a correct alias for `is_transient()`.
 ///
 /// Tests that both methods return the same result for both transient

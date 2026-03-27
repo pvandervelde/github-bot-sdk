@@ -257,6 +257,16 @@ pub enum ApiError {
     /// Failed to exchange token.
     #[error("Token exchange failed: {message}")]
     TokenExchangeFailed { message: String },
+
+    /// GraphQL API returned an application-level error.
+    ///
+    /// GitHub's GraphQL endpoint always returns HTTP 200; errors are reported
+    /// inside the response body under `.errors[].message`. This variant
+    /// captures the first such message. It is non-retryable because it
+    /// indicates a logic error in the query or variables, not a transient
+    /// infrastructure problem.
+    #[error("GraphQL error: {message}")]
+    GraphQlError { message: String },
 }
 
 impl ApiError {
@@ -282,6 +292,7 @@ impl ApiError {
             Self::Configuration { .. } => false, // Configuration errors are permanent
             Self::TokenGenerationFailed { .. } => false, // Token generation errors are auth errors
             Self::TokenExchangeFailed { .. } => false, // Token exchange errors are auth errors
+            Self::GraphQlError { .. } => false, // Logic error in query/variables, not retryable
         }
     }
 }

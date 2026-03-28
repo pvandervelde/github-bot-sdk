@@ -1,5 +1,8 @@
 //! Tests for project operations.
 
+#[path = "test_helpers.rs"]
+mod test_helpers;
+
 mod construction {
     use super::super::*;
 
@@ -176,15 +179,12 @@ mod error_handling {
 // ============================================================================
 
 mod get_issue_linked_projects_tests {
+    use super::test_helpers::MockAuthProvider;
     use crate::auth::InstallationId;
     use crate::client::{ClientConfig, GitHubClient, InstallationClient};
     use crate::error::ApiError;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    #[path = "test_helpers.rs"]
-    mod test_helpers;
-    use test_helpers::MockAuthProvider;
 
     async fn make_client(mock_server: &MockServer, token: &str) -> InstallationClient {
         let auth = MockAuthProvider::new_with_token(token);

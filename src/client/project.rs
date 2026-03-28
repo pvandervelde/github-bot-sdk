@@ -25,7 +25,7 @@ pub struct ProjectV2 {
     /// Project description
     pub description: Option<String>,
 
-    /// Project owner (organization or user)
+    /// Project owner (organisation or user)
     pub owner: ProjectOwner,
 
     /// Project visibility
@@ -41,7 +41,7 @@ pub struct ProjectV2 {
     pub url: String,
 }
 
-/// Project owner (organization or user).
+/// Project owner (organisation or user).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectOwner {
     /// Owner login name
@@ -87,12 +87,106 @@ pub struct AddProjectV2ItemRequest {
     pub content_node_id: String,
 }
 
+// ---------------------------------------------------------------------------
+// GraphQL query for get_issue_linked_projects
+// ---------------------------------------------------------------------------
+
+const GET_ISSUE_LINKED_PROJECTS_QUERY: &str = r#"
+query GetIssueLinkedProjects($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      projectsV2(first: 20) {
+        nodes {
+          id
+          databaseId
+          number
+          title
+          description
+          public
+          url
+          createdAt
+          updatedAt
+          owner {
+            ... on Organization {
+              id
+              databaseId
+              login
+              type: __typename
+            }
+            ... on User {
+              id
+              databaseId
+              login
+              type: __typename
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"#;
+
+/// Map a single GraphQL `projectsV2.nodes` JSON node to a [`ProjectV2`].
+///
+/// Returns `None` when required fields are absent or have unexpected types,
+/// which causes the node to be silently skipped rather than crashing.
+fn map_project_node(node: &serde_json::Value) -> Option<ProjectV2> {
+    let id = node.get("databaseId")?.as_u64()?;
+    let node_id = node.get("id")?.as_str()?.to_string();
+    let number = node.get("number")?.as_u64()?;
+    let title = node.get("title")?.as_str()?.to_string();
+    let description = node
+        .get("description")
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
+    let public = node.get("public")?.as_bool()?;
+    let url = node.get("url")?.as_str()?.to_string();
+    let created_at: DateTime<Utc> = node.get("createdAt")?.as_str()?.parse().ok()?;
+    let updated_at: DateTime<Utc> = node.get("updatedAt")?.as_str()?.parse().ok()?;
+
+    let owner_node = node.get("owner")?;
+    let owner_login = owner_node.get("login")?.as_str()?.to_string();
+    let owner_type = owner_node
+        .get("type")
+        .and_then(|t| t.as_str())
+        .unwrap_or("User")
+        .to_string();
+    let owner_id = owner_node
+        .get("databaseId")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let owner_node_id = owner_node
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    Some(ProjectV2 {
+        id,
+        node_id,
+        number,
+        title,
+        description,
+        owner: ProjectOwner {
+            login: owner_login,
+            owner_type,
+            id: owner_id,
+            node_id: owner_node_id,
+        },
+        public,
+        created_at,
+        updated_at,
+        url,
+    })
+}
+
 impl InstallationClient {
     // ========================================================================
     // Project Operations
     // ========================================================================
 
-    /// List all Projects v2 for an organization.
+    /// List all Projects v2 for an organisation.
     ///
     /// See docs/spec/interfaces/project-operations.md
     pub async fn list_organization_projects(&self, _org: &str) -> Result<Vec<ProjectV2>, ApiError> {
@@ -148,12 +242,33 @@ impl InstallationClient {
     /// - `Err(ApiError)` — other transport or GraphQL errors
     pub async fn get_issue_linked_projects(
         &self,
-        _owner: &str,
-        _repo: &str,
-        _issue_number: u64,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
     ) -> Result<Vec<ProjectV2>, ApiError> {
-        let _ = (_owner, _repo, _issue_number);
-        unimplemented!("get_issue_linked_projects: see task 2.0")
+        let variables = serde_json::json!({
+            "owner": owner,
+            "repo": repo,
+            "number": issue_number,
+        });
+
+        let data = self
+            .post_graphql(GET_ISSUE_LINKED_PROJECTS_QUERY, variables)
+            .await?;
+
+        let nodes = data
+            .get("repository")
+            .and_then(|r| r.get("issue"))
+            .and_then(|i| i.get("projectsV2"))
+            .and_then(|p| p.get("nodes"))
+            .and_then(|n| n.as_array());
+
+        let projects = match nodes {
+            Some(arr) => arr.iter().filter_map(map_project_node).collect(),
+            None => Vec::new(),
+        };
+
+        Ok(projects)
     }
 
     /// Remove an item from a project.

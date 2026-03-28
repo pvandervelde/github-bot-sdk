@@ -213,14 +213,44 @@ impl InstallationClient {
 
     /// Add an issue or pull request to a project.
     ///
-    /// See docs/spec/interfaces/project-operations.md
+    /// Resolves the project node ID from `owner` + `project_number` (trying organisation
+    /// first, then falling back to user), then calls the `addProjectV2ItemById` GraphQL
+    /// mutation to attach the content.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner`          - Organisation or user login name
+    /// * `project_number` - Project number (unique within owner)
+    /// * `content_node_id` - Node ID of the issue or pull request to add
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(ProjectV2Item)` — the newly created project item
+    /// - `Err(ApiError::NotFound)` — project not found for this owner
+    /// - `Err(ApiError::AuthorizationFailed)` — no write access to the project
+    /// - `Err(ApiError)` — other transport or GraphQL errors
     pub async fn add_item_to_project(
         &self,
         _owner: &str,
         _project_number: u64,
         _content_node_id: &str,
     ) -> Result<ProjectV2Item, ApiError> {
-        unimplemented!("See docs/spec/interfaces/project-operations.md")
+        let _ = (_owner, _project_number, _content_node_id);
+        unimplemented!("add_item_to_project: see task 3.0")
+    }
+
+    /// Resolve an owner + project number to the project's GraphQL node ID.
+    ///
+    /// Attempts an organisation query first. If the response carries a
+    /// `NOT_FOUND` error the query is retried against the user namespace.
+    /// Returns `ApiError::NotFound` when neither lookup succeeds.
+    async fn get_project_node_id(
+        &self,
+        _owner: &str,
+        _project_number: u64,
+    ) -> Result<String, ApiError> {
+        let _ = (_owner, _project_number);
+        unimplemented!("get_project_node_id: see task 3.1")
     }
 
     /// Get all Projects v2 linked to a specific issue.

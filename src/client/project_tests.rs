@@ -373,3 +373,297 @@ mod get_issue_linked_projects_tests {
         ));
     }
 }
+
+// ============================================================================
+// add_item_to_project integration tests
+// ============================================================================
+
+mod add_item_to_project_tests {
+    use super::test_helpers::MockAuthProvider;
+    use crate::auth::InstallationId;
+    use crate::client::{ClientConfig, GitHubClient, InstallationClient};
+    use crate::error::ApiError;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    async fn make_client(mock_server: &MockServer, token: &str) -> InstallationClient {
+        let auth = MockAuthProvider::new_with_token(token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap()
+    }
+
+    // -----------------------------------------------------------------------
+    // Mock response builders
+    // -----------------------------------------------------------------------
+
+    /// org-level project node ID lookup — success.
+    fn org_lookup_response(node_id: &str) -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "organization": {
+                    "projectV2": { "id": node_id }
+                }
+            }
+        })
+    }
+
+    /// org-level lookup returns NOT_FOUND → must fall back to user lookup.
+    fn org_not_found_response() -> serde_json::Value {
+        serde_json::json!({
+            "errors": [{ "type": "NOT_FOUND", "message": "org not found" }]
+        })
+    }
+
+    /// user-level project node ID lookup — success.
+    fn user_lookup_response(node_id: &str) -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "user": {
+                    "projectV2": { "id": node_id }
+                }
+            }
+        })
+    }
+
+    /// Both org and user lookups return NOT_FOUND.
+    fn user_not_found_response() -> serde_json::Value {
+        serde_json::json!({
+            "errors": [{ "type": "NOT_FOUND", "message": "user project not found" }]
+        })
+    }
+
+    /// addProjectV2ItemById mutation — success.
+    fn add_item_success_response() -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "addProjectV2ItemById": {
+                    "item": {
+                        "id": "PVTI_lADOAE1L0M4AA1qJzgDeF2s",
+                        "type": "ISSUE",
+                        "createdAt": "2022-04-28T16:30:00Z",
+                        "updatedAt": "2022-04-28T16:31:00Z",
+                        "content": {
+                            "__typename": "Issue",
+                            "id": "I_kwDOAE1L0M5abc123"
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    /// addProjectV2ItemById mutation — item already exists in project.
+    fn add_item_already_exists_response() -> serde_json::Value {
+        serde_json::json!({
+            "errors": [{
+                "message": "Item already added to project",
+                "type": "UNPROCESSABLE"
+            }]
+        })
+    }
+
+    // -----------------------------------------------------------------------
+    // Tests
+    // -----------------------------------------------------------------------
+
+    /// Verify add_item_to_project returns a populated ProjectV2Item on success.
+    ///
+    /// Two sequential GraphQL calls are mocked: org node-ID lookup then the
+    /// addProjectV2ItemById mutation. The returned item must have all fields
+    /// populated from the mutation response.
+    #[tokio::test]
+    async fn test_successful_add_returns_populated_item() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+        let project_node_id = "PVT_kwDOAE1L0M4AA1qJ";
+
+        // 1st call → org node ID resolution
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(org_lookup_response(project_node_id)),
+            )
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        // 2nd call → addProjectV2ItemById mutation
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(add_item_success_response()))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .await;
+
+        assert!(result.is_ok(), "expected Ok, got {:?}", result);
+        let item = result.unwrap();
+        assert_eq!(item.id, "PVTI_lADOAE1L0M4AA1qJzgDeF2s");
+        assert_eq!(item.content_type, "ISSUE");
+        assert_eq!(item.content_node_id, "I_kwDOAE1L0M5abc123");
+        assert!(item.created_at.to_rfc3339().starts_with("2022-04-28"));
+    }
+
+    /// Verify add_item_to_project falls back to user lookup when org NOT_FOUND.
+    ///
+    /// When the org-level `projectV2` query returns NOT_FOUND, a second call
+    /// using the user-level query must be attempted and the item added.
+    #[tokio::test]
+    async fn test_falls_back_to_user_when_org_not_found() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+        let project_node_id = "PVT_kwDOAE1L0M4AA1qJ";
+
+        // 1st call → org lookup → NOT_FOUND
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(org_not_found_response()))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        // 2nd call → user lookup → success
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(user_lookup_response(project_node_id)),
+            )
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        // 3rd call → addProjectV2ItemById mutation
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(add_item_success_response()))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "expected Ok after user fallback, got {:?}",
+            result
+        );
+        assert_eq!(result.unwrap().id, "PVTI_lADOAE1L0M4AA1qJzgDeF2s");
+    }
+
+    /// Verify add_item_to_project returns ApiError::NotFound when project is not found.
+    ///
+    /// Both the org and user lookups return NOT_FOUND; the function must surface
+    /// ApiError::NotFound to the caller rather than panicking or returning a generic error.
+    #[tokio::test]
+    async fn test_returns_not_found_when_project_does_not_exist() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+
+        // 1st call → org lookup → NOT_FOUND
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(org_not_found_response()))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        // 2nd call → user lookup → NOT_FOUND
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(user_not_found_response()))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .add_item_to_project("unknown-owner", 99, "I_kwDOAE1L0M5abc123")
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ApiError::NotFound),
+            "expected ApiError::NotFound"
+        );
+    }
+
+    /// Verify add_item_to_project returns ApiError::GraphQlError when content is already
+    /// in the project.
+    ///
+    /// The `addProjectV2ItemById` mutation returns an UNPROCESSABLE error when the
+    /// content is already present. This must be surfaced as ApiError::GraphQlError with
+    /// the original message so callers can handle duplicate additions.
+    #[tokio::test]
+    async fn test_returns_graphql_error_when_item_already_in_project() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+        let project_node_id = "PVT_kwDOAE1L0M4AA1qJ";
+
+        // 1st call → org node ID resolution
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(org_lookup_response(project_node_id)),
+            )
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        // 2nd call → mutation returns UNPROCESSABLE
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(add_item_already_exists_response()),
+            )
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ApiError::GraphQlError { .. }),
+            "expected ApiError::GraphQlError for duplicate item"
+        );
+    }
+
+    /// Verify add_item_to_project returns ApiError::AuthenticationFailed on HTTP 401.
+    #[tokio::test]
+    async fn test_returns_authentication_failed_on_401() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, "bad-token").await;
+        let result = client
+            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::AuthenticationFailed
+        ));
+    }
+}

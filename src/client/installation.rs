@@ -444,8 +444,42 @@ impl InstallationClient {
         query: &str,
         variables: V,
     ) -> Result<serde_json::Value, ApiError> {
-        let _ = (query, variables); // stub — implementation in phase 2
-        unimplemented!("post_graphql: see task 1.2")
+        let body_json =
+            serde_json::to_value(serde_json::json!({ "query": query, "variables": variables }))
+                .map_err(ApiError::JsonError)?;
+
+        let response = self
+            .execute_with_retry("POST graphql", || async {
+                let (token, url) = self.prepare_request("graphql", "POST").await?;
+                self.client
+                    .http_client()
+                    .post(&url)
+                    .header("Authorization", format!("Bearer {}", token))
+                    .header("Accept", "application/vnd.github+json")
+                    .json(&body_json)
+                    .send()
+                    .await
+                    .map_err(ApiError::HttpClientError)
+            })
+            .await?;
+
+        let payload: serde_json::Value =
+            response.json().await.map_err(ApiError::HttpClientError)?;
+
+        // GraphQL returns HTTP 200 even for errors; check .errors[] first.
+        if let Some(errors) = payload.get("errors").and_then(|e| e.as_array()) {
+            if let Some(first_message) = errors
+                .first()
+                .and_then(|e| e.get("message"))
+                .and_then(|m| m.as_str())
+            {
+                return Err(ApiError::GraphQlError {
+                    message: first_message.to_string(),
+                });
+            }
+        }
+
+        Ok(payload["data"].clone())
     }
 
     /// Make an authenticated PATCH request to the GitHub API.

@@ -129,6 +129,33 @@ impl InstallationClient {
         unimplemented!("See docs/spec/interfaces/project-operations.md")
     }
 
+    /// Get all Projects v2 linked to a specific issue.
+    ///
+    /// Queries the GitHub GraphQL API for all Projects v2 that contain the given issue.
+    /// Returns an empty `Vec` when the issue exists but is not linked to any projects.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Repository owner (organisation or user login)
+    /// * `repo`  - Repository name
+    /// * `issue_number` - Issue number
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Vec<ProjectV2>)` — projects linked to the issue (may be empty)
+    /// - `Err(ApiError::NotFound)` — repository or issue does not exist
+    /// - `Err(ApiError::AuthenticationFailed)` — token is invalid
+    /// - `Err(ApiError)` — other transport or GraphQL errors
+    pub async fn get_issue_linked_projects(
+        &self,
+        _owner: &str,
+        _repo: &str,
+        _issue_number: u64,
+    ) -> Result<Vec<ProjectV2>, ApiError> {
+        let _ = (_owner, _repo, _issue_number);
+        unimplemented!("get_issue_linked_projects: see task 2.0")
+    }
+
     /// Remove an item from a project.
     ///
     /// See docs/spec/interfaces/project-operations.md

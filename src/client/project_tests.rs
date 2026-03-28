@@ -170,3 +170,206 @@ mod error_handling {
         todo!("Mock: 404 when org doesn't exist")
     }
 }
+
+// ============================================================================
+// get_issue_linked_projects integration tests
+// ============================================================================
+
+mod get_issue_linked_projects_tests {
+    use crate::auth::InstallationId;
+    use crate::client::{ClientConfig, GitHubClient, InstallationClient};
+    use crate::error::ApiError;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[path = "test_helpers.rs"]
+    mod test_helpers;
+    use test_helpers::MockAuthProvider;
+
+    async fn make_client(mock_server: &MockServer, token: &str) -> InstallationClient {
+        let auth = MockAuthProvider::new_with_token(token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap()
+    }
+
+    /// Stub GraphQL response for an issue linked to one project.
+    fn linked_projects_response() -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "repository": {
+                    "issue": {
+                        "projectsV2": {
+                            "nodes": [
+                                {
+                                    "id": "PVT_kwDOAE1L0M4AA1qJ",
+                                    "databaseId": 12345,
+                                    "number": 1,
+                                    "title": "Sprint Board",
+                                    "description": "Sprint tracking project",
+                                    "public": true,
+                                    "url": "https://github.com/orgs/octocat/projects/1",
+                                    "createdAt": "2022-04-28T16:30:00Z",
+                                    "updatedAt": "2022-04-29T08:00:00Z",
+                                    "owner": {
+                                        "login": "octocat",
+                                        "type": "Organization",
+                                        "id": "MDEyOk9yZ2FuaXphdGlvbjE=",
+                                        "databaseId": 1
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    /// Stub GraphQL response for an issue with no linked projects.
+    fn no_projects_response() -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "repository": {
+                    "issue": {
+                        "projectsV2": {
+                            "nodes": []
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    /// Stub GraphQL NOT_FOUND error response.
+    fn not_found_response() -> serde_json::Value {
+        serde_json::json!({
+            "errors": [
+                {
+                    "type": "NOT_FOUND",
+                    "message": "Could not resolve to a Repository with the name 'owner/missing-repo'."
+                }
+            ]
+        })
+    }
+
+    /// Verify get_issue_linked_projects returns a populated Vec when the issue has projects.
+    ///
+    /// The GraphQL response includes one project node; the function must map all fields
+    /// of ProjectV2 and ProjectOwner correctly and return a non-empty Vec.
+    #[tokio::test]
+    async fn test_returns_projects_when_issue_has_linked_projects() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(linked_projects_response()))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .get_issue_linked_projects("octocat", "Hello-World", 42)
+            .await;
+
+        assert!(result.is_ok(), "expected Ok, got {:?}", result);
+        let projects = result.unwrap();
+        assert_eq!(projects.len(), 1);
+        let project = &projects[0];
+        assert_eq!(project.id, 12345);
+        assert_eq!(project.node_id, "PVT_kwDOAE1L0M4AA1qJ");
+        assert_eq!(project.number, 1);
+        assert_eq!(project.title, "Sprint Board");
+        assert_eq!(
+            project.description,
+            Some("Sprint tracking project".to_string())
+        );
+        assert!(project.public);
+        assert_eq!(project.url, "https://github.com/orgs/octocat/projects/1");
+        assert_eq!(project.owner.login, "octocat");
+        assert_eq!(project.owner.owner_type, "Organization");
+        assert_eq!(project.owner.id, 1);
+        assert_eq!(project.owner.node_id, "MDEyOk9yZ2FuaXphdGlvbjE=");
+    }
+
+    /// Verify get_issue_linked_projects returns an empty Vec when the issue has no projects.
+    ///
+    /// When `projectsV2.nodes` is an empty array, the function must return Ok(vec![])
+    /// rather than an error — the issue exists, it just isn't linked to any project.
+    #[tokio::test]
+    async fn test_returns_empty_vec_when_issue_has_no_linked_projects() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(no_projects_response()))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .get_issue_linked_projects("octocat", "Hello-World", 1)
+            .await;
+
+        assert!(result.is_ok(), "expected Ok, got {:?}", result);
+        assert!(result.unwrap().is_empty());
+    }
+
+    /// Verify get_issue_linked_projects returns ApiError::NotFound for missing repo/issue.
+    ///
+    /// GitHub GraphQL returns `type: "NOT_FOUND"` in the errors array when the repository
+    /// or issue does not exist. The function must surface this as ApiError::NotFound.
+    #[tokio::test]
+    async fn test_returns_not_found_for_missing_repository_or_issue() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(not_found_response()))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .get_issue_linked_projects("owner", "missing-repo", 1)
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ApiError::NotFound),
+            "expected ApiError::NotFound"
+        );
+    }
+
+    /// Verify get_issue_linked_projects returns ApiError::AuthenticationFailed on HTTP 401.
+    ///
+    /// Even though the GraphQL endpoint normally returns 200, an invalid token produces
+    /// a 401 that must be propagated as ApiError::AuthenticationFailed.
+    #[tokio::test]
+    async fn test_returns_authentication_failed_on_401() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, "bad-token").await;
+        let result = client.get_issue_linked_projects("owner", "repo", 1).await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::AuthenticationFailed
+        ));
+    }
+}

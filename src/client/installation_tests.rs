@@ -1208,6 +1208,44 @@ mod post_graphql_tests {
         assert!(result.is_ok());
         assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
+
+    /// Verify post_graphql maps GraphQL NOT_FOUND errors to ApiError::NotFound.
+    ///
+    /// GitHub GraphQL uses `type: "NOT_FOUND"` in the errors array when a repository
+    /// or other resource does not exist. This must translate to ApiError::NotFound so
+    /// callers can handle missing resources the same way as REST 404 responses.
+    #[tokio::test]
+    async fn test_post_graphql_not_found_error() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "errors": [
+                    {
+                        "type": "NOT_FOUND",
+                        "message": "Could not resolve to a Repository with the name 'owner/repo'."
+                    }
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .post_graphql(
+                "{ repository(owner: \"owner\", name: \"repo\") { id } }",
+                serde_json::json!({}),
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ApiError::NotFound),
+            "Expected ApiError::NotFound for GraphQL NOT_FOUND error type"
+        );
+    }
 }
 
 // ============================================================================

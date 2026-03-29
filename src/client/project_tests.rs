@@ -555,6 +555,7 @@ mod add_item_to_project_tests {
         assert!(result.is_ok(), "expected Ok, got {:?}", result);
         let item = result.unwrap();
         assert_eq!(item.id, "PVTI_lADOAE1L0M4AA1qJzgDeF2s");
+        assert_eq!(item.node_id, "PVTI_lADOAE1L0M4AA1qJzgDeF2s");
         assert_eq!(item.content_type, "ISSUE");
         assert_eq!(item.content_node_id, "I_kwDOAE1L0M5abc123");
         assert!(item.created_at.to_rfc3339().starts_with("2022-04-28"));

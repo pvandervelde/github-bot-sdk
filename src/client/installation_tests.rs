@@ -1246,6 +1246,43 @@ mod post_graphql_tests {
             "Expected ApiError::NotFound for GraphQL NOT_FOUND error type"
         );
     }
+
+    /// Verify post_graphql returns ApiError::GraphQlError when the response has neither
+    /// `errors` nor a non-null `data` field.
+    ///
+    /// A malformed or unexpected GraphQL response body that contains neither `.errors`
+    /// nor a non-null `.data` field must return a clear `ApiError::GraphQlError` rather
+    /// than silently returning `Value::Null` to callers.
+    #[tokio::test]
+    async fn test_post_graphql_missing_data_field() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .post_graphql("{ viewer { login } }", serde_json::json!({}))
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::GraphQlError { message } => {
+                assert!(
+                    message.contains("data"),
+                    "expected error message to mention 'data', got: {message}"
+                );
+            }
+            other => panic!(
+                "Expected GraphQlError for missing data field, got: {:?}",
+                other
+            ),
+        }
+    }
 }
 
 // ============================================================================

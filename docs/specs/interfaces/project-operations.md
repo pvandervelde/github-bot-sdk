@@ -284,9 +284,12 @@ pub async fn add_item_to_project(
 
 **Behavior**:
 
-1. Create `AddProjectV2ItemRequest` with content node ID
-2. Make POST request to `/projects/{project_id}/items`
-3. Parse response into `ProjectV2Item`
+1. Resolve the project's GraphQL node ID (`PVT_...`) from `owner` + `project_number`:
+   - Query `organization(login: $owner) { projectV2(number: $number) { id } }` first
+   - If the organisation is not found (`NOT_FOUND` error), fall back to `user(login: $owner) { projectV2(number: $number) { id } }`
+   - If both lookups fail, return `Err(ApiError::NotFound)`
+2. Call the `addProjectV2ItemById` GraphQL mutation with the resolved `projectId` and `content_node_id`
+3. Parse the `item` from the mutation response into `ProjectV2Item`
 4. Return item
 
 **Example**:
@@ -296,6 +299,53 @@ pub async fn add_item_to_project(
 let issue = client.get_issue("owner", "repo", 123).await?;
 let item = client.add_item_to_project("my-org", 1, &issue.node_id).await?;
 println!("Added item: {}", item.id);
+```
+
+---
+
+### Get Issue Linked Projects
+
+Get all Projects v2 linked to a specific issue.
+
+**Signature**:
+
+```rust
+pub async fn get_issue_linked_projects(
+    &self,
+    owner: &str,
+    repo: &str,
+    issue_number: u64,
+) -> Result<Vec<ProjectV2>, ApiError>
+```
+
+**Arguments**:
+
+- `owner` - Repository owner (organisation or user login)
+- `repo` - Repository name
+- `issue_number` - Issue number
+
+**Returns**:
+
+- `Ok(Vec<ProjectV2>)` - Projects linked to the issue (may be empty)
+- `Err(ApiError::NotFound)` - Repository or issue does not exist
+- `Err(ApiError::AuthenticationFailed)` - Token is invalid
+- `Err(ApiError)` - Other errors
+
+**Behavior**:
+
+1. Send a GraphQL `repository(owner, name) { issue(number) { projectsV2(first: 20) { nodes { ... } } } }` query
+2. If the repository or issue does not exist, GitHub GraphQL returns `type: "NOT_FOUND"` in `.errors[]` — surface this as `ApiError::NotFound`
+3. Map each node in `projectsV2.nodes` to a `ProjectV2` struct (populating all fields including owner)
+4. Return an empty `Vec` when the issue exists but is not linked to any projects
+
+**Example**:
+
+```rust
+let projects = client.get_issue_linked_projects("my-org", "my-repo", 42).await?;
+for project in &projects {
+    println!("Issue is in project: {} ({})", project.title, project.number);
+}
+// Returns Ok(vec![]) if the issue has no linked projects
 ```
 
 ---

@@ -181,6 +181,47 @@ fn map_project_node(node: &serde_json::Value) -> Option<ProjectV2> {
     })
 }
 
+// ---------------------------------------------------------------------------
+// GraphQL queries and mutations for project item operations
+// ---------------------------------------------------------------------------
+
+const GET_PROJECT_NODE_ID_ORG_QUERY: &str = r#"
+query GetProjectNodeIdOrg($owner: String!, $number: Int!) {
+  organization(login: $owner) {
+    projectV2(number: $number) {
+      id
+    }
+  }
+}
+"#;
+
+const GET_PROJECT_NODE_ID_USER_QUERY: &str = r#"
+query GetProjectNodeIdUser($owner: String!, $number: Int!) {
+  user(login: $owner) {
+    projectV2(number: $number) {
+      id
+    }
+  }
+}
+"#;
+
+const ADD_PROJECT_ITEM_MUTATION: &str = r#"
+mutation AddProjectV2Item($projectId: ID!, $contentId: ID!) {
+  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+    item {
+      id
+      type
+      createdAt
+      updatedAt
+      content {
+        ... on Issue { id }
+        ... on PullRequest { id }
+      }
+    }
+  }
+}
+"#;
+
 impl InstallationClient {
     // ========================================================================
     // Project Operations
@@ -231,12 +272,70 @@ impl InstallationClient {
     /// - `Err(ApiError)` — other transport or GraphQL errors
     pub async fn add_item_to_project(
         &self,
-        _owner: &str,
-        _project_number: u64,
-        _content_node_id: &str,
+        owner: &str,
+        project_number: u64,
+        content_node_id: &str,
     ) -> Result<ProjectV2Item, ApiError> {
-        let _ = (_owner, _project_number, _content_node_id);
-        unimplemented!("add_item_to_project: see task 3.0")
+        let project_node_id = self.get_project_node_id(owner, project_number).await?;
+
+        let variables = serde_json::json!({
+            "projectId": project_node_id,
+            "contentId": content_node_id,
+        });
+
+        let data = self
+            .post_graphql(ADD_PROJECT_ITEM_MUTATION, variables)
+            .await?;
+
+        let item = data
+            .get("addProjectV2ItemById")
+            .and_then(|a| a.get("item"))
+            .ok_or_else(|| ApiError::GraphQlError {
+                message: "addProjectV2ItemById returned no item".to_string(),
+            })?;
+
+        let item_id = item
+            .get("id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ApiError::GraphQlError {
+                message: "project item missing id field".to_string(),
+            })?
+            .to_string();
+
+        let content_type = item
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("ISSUE")
+            .to_string();
+
+        let created_at: DateTime<Utc> = item
+            .get("createdAt")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(Utc::now);
+
+        let updated_at: DateTime<Utc> = item
+            .get("updatedAt")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(Utc::now);
+
+        // content.id is the node ID of the linked issue or PR.
+        let linked_content_node_id = item
+            .get("content")
+            .and_then(|c| c.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or(content_node_id)
+            .to_string();
+
+        Ok(ProjectV2Item {
+            id: item_id.clone(),
+            node_id: item_id,
+            content_type,
+            content_node_id: linked_content_node_id,
+            created_at,
+            updated_at,
+        })
     }
 
     /// Resolve an owner + project number to the project's GraphQL node ID.
@@ -246,11 +345,47 @@ impl InstallationClient {
     /// Returns `ApiError::NotFound` when neither lookup succeeds.
     async fn get_project_node_id(
         &self,
-        _owner: &str,
-        _project_number: u64,
+        owner: &str,
+        project_number: u64,
     ) -> Result<String, ApiError> {
-        let _ = (_owner, _project_number);
-        unimplemented!("get_project_node_id: see task 3.1")
+        let variables = serde_json::json!({
+            "owner": owner,
+            "number": project_number,
+        });
+
+        // Try organisation first.
+        match self
+            .post_graphql(GET_PROJECT_NODE_ID_ORG_QUERY, variables.clone())
+            .await
+        {
+            Ok(data) => {
+                if let Some(id) = data
+                    .get("organization")
+                    .and_then(|o| o.get("projectV2"))
+                    .and_then(|p| p.get("id"))
+                    .and_then(|v| v.as_str())
+                {
+                    return Ok(id.to_string());
+                }
+                // data.organization.projectV2 was null — fall through to user lookup.
+            }
+            Err(ApiError::NotFound) => {
+                // org not found — fall through to user lookup.
+            }
+            Err(other) => return Err(other),
+        }
+
+        // Fall back to user lookup.
+        let data = self
+            .post_graphql(GET_PROJECT_NODE_ID_USER_QUERY, variables)
+            .await?;
+
+        data.get("user")
+            .and_then(|u| u.get("projectV2"))
+            .and_then(|p| p.get("id"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or(ApiError::NotFound)
     }
 
     /// Get all Projects v2 linked to a specific issue.

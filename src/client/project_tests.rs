@@ -134,22 +134,68 @@ mod serialization {
         assert!(project.updated_at.to_rfc3339().starts_with("2022-04-28"));
     }
 
+    /// Verify ProjectOwner can be deserialized from JSON.
+    ///
+    /// Tests that ProjectOwner correctly deserializes all fields including the
+    /// `type` rename (serde attribute maps "type" JSON key to `owner_type`).
     #[test]
-    #[ignore = "TODO: Verify ProjectOwner can be deserialized"]
     fn test_project_owner_deserialize() {
-        todo!("Verify ProjectOwner can be deserialized")
+        let json = r#"{
+            "login": "octocat",
+            "type": "Organization",
+            "id": 1,
+            "node_id": "MDEyOk9yZ2FuaXphdGlvbjE="
+        }"#;
+
+        let owner: ProjectOwner = serde_json::from_str(json).unwrap();
+
+        assert_eq!(owner.login, "octocat");
+        assert_eq!(owner.owner_type, "Organization");
+        assert_eq!(owner.id, 1);
+        assert_eq!(owner.node_id, "MDEyOk9yZ2FuaXphdGlvbjE=");
     }
 
+    /// Verify ProjectV2Item can be deserialized from JSON.
+    ///
+    /// Tests that ProjectV2Item correctly deserializes all six fields:
+    /// id, node_id, content_type, content_node_id, created_at, updated_at.
     #[test]
-    #[ignore = "TODO: Verify ProjectV2Item can be deserialized"]
     fn test_project_v2_item_deserialize() {
-        todo!("Verify ProjectV2Item can be deserialized")
+        let json = r#"{
+            "id": "PVTI_lADOAE1L0M4AA1qJzgDeF2s",
+            "node_id": "PVTI_lADOAE1L0M4AA1qJzgDeF2s",
+            "content_type": "Issue",
+            "content_node_id": "I_kwDOAE1L0M5abc123",
+            "created_at": "2022-04-28T16:30:00Z",
+            "updated_at": "2022-04-29T08:00:00Z"
+        }"#;
+
+        let item: ProjectV2Item = serde_json::from_str(json).unwrap();
+
+        assert_eq!(item.id, "PVTI_lADOAE1L0M4AA1qJzgDeF2s");
+        assert_eq!(item.node_id, "PVTI_lADOAE1L0M4AA1qJzgDeF2s");
+        assert_eq!(item.content_type, "Issue");
+        assert_eq!(item.content_node_id, "I_kwDOAE1L0M5abc123");
+        assert!(item.created_at.to_rfc3339().starts_with("2022-04-28"));
+        assert!(item.updated_at.to_rfc3339().starts_with("2022-04-29"));
     }
 
+    /// Verify AddProjectV2ItemRequest serializes to the expected JSON shape.
+    ///
+    /// The field name must remain `content_node_id` in the serialized output
+    /// (no rename attribute), matching the REST API contract.
     #[test]
-    #[ignore = "TODO: Verify AddProjectV2ItemRequest serializes correctly"]
     fn test_add_project_item_request_serialize() {
-        todo!("Verify AddProjectV2ItemRequest serializes correctly")
+        let request = AddProjectV2ItemRequest {
+            content_node_id: "I_kwDOAE1L0M5abc123".to_string(),
+        };
+
+        let json = serde_json::to_string(&request).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["content_node_id"], "I_kwDOAE1L0M5abc123");
+        // Confirm exactly one field is serialized.
+        assert_eq!(parsed.as_object().unwrap().len(), 1);
     }
 }
 

@@ -485,6 +485,12 @@ impl InstallationClient {
             }
         }
 
+        if !payload.get("data").is_some_and(|v| !v.is_null()) {
+            return Err(ApiError::GraphQlError {
+                message: "GraphQL response missing `data` field".to_string(),
+            });
+        }
+
         Ok(payload["data"].clone())
     }
 

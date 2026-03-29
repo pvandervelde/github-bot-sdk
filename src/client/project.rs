@@ -152,10 +152,14 @@ fn map_project_node(node: &serde_json::Value) -> Option<ProjectV2> {
         .and_then(|t| t.as_str())
         .unwrap_or("User")
         .to_string();
+    // The query always selects `databaseId` on both Organization and User owner fragments;
+    // `unwrap_or(0)` is a defensive default for a query-guaranteed-present field.
     let owner_id = owner_node
         .get("databaseId")
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
+    // Similarly, `id` (the owner's global node ID) is always selected by the query;
+    // `unwrap_or("")` is a defensive default that is not reached in practice.
     let owner_node_id = owner_node
         .get("id")
         .and_then(|v| v.as_str())
@@ -330,6 +334,9 @@ impl InstallationClient {
 
         Ok(ProjectV2Item {
             id: item_id.clone(),
+            // GitHub Projects v2 exposes only a single `id` (the global node ID) for
+            // ProjectV2Item objects — there is no separate integer `databaseId`. Both
+            // `id` and `node_id` therefore carry the same value.
             node_id: item_id,
             content_type,
             content_node_id: linked_content_node_id,

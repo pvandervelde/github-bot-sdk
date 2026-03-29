@@ -183,7 +183,8 @@ mod serialization {
     /// Verify AddProjectV2ItemRequest serializes to the expected JSON shape.
     ///
     /// The field name must remain `content_node_id` in the serialized output
-    /// (no rename attribute), matching the REST API contract.
+    /// (no rename attribute), matching the GraphQL variable name expected by the
+    /// `addProjectV2ItemById` mutation.
     #[test]
     fn test_add_project_item_request_serialize() {
         let request = AddProjectV2ItemRequest {

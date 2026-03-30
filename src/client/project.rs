@@ -455,9 +455,7 @@ impl InstallationClient {
                 .post_graphql(GET_ISSUE_LINKED_PROJECTS_QUERY, variables)
                 .await?;
 
-            let issue_node = data
-                .get("repository")
-                .and_then(|r| r.get("issue"));
+            let issue_node = data.get("repository").and_then(|r| r.get("issue"));
 
             // GitHub returns `"issue": null` (not a GraphQL error) when the issue
             // number does not exist in the repository. Surface this as NotFound so

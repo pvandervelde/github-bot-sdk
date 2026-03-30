@@ -1247,6 +1247,46 @@ mod post_graphql_tests {
         );
     }
 
+    /// Verify post_graphql returns ApiError::GraphQlError when errors contains a typed
+    /// error with no `message` field.
+    ///
+    /// GitHub may return `{"type": "FORBIDDEN"}` (or similar) in the errors array without
+    /// a `message` key. Previously this fell through silently; the catch-all must surface
+    /// it as a generic GraphQlError so callers always see an error.
+    #[tokio::test]
+    async fn test_post_graphql_error_type_without_message() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "errors": [{ "type": "FORBIDDEN" }],
+                "data": { "viewer": { "login": "octocat" } }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .post_graphql("{ viewer { login } }", serde_json::json!({}))
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::GraphQlError { message } => {
+                assert!(
+                    message.contains("errors"),
+                    "expected message to mention 'errors', got: {message}"
+                );
+            }
+            other => panic!(
+                "Expected GraphQlError for typed error without message, got: {:?}",
+                other
+            ),
+        }
+    }
+
     /// Verify post_graphql returns ApiError::GraphQlError when the response has neither
     /// `errors` nor a non-null `data` field.
     ///

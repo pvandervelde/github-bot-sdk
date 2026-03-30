@@ -152,7 +152,7 @@ pub async fn list_organization_projects(
 
 - `Ok(Vec<ProjectV2>)` - List of projects
 - `Err(ApiError::NotFound)` - Organization not found
-- `Err(ApiError::Forbidden)` - Insufficient permissions
+- `Err(ApiError::AuthorizationFailed)` - Insufficient permissions
 - `Err(ApiError)` - Other errors
 
 **Behavior**:
@@ -193,7 +193,7 @@ pub async fn list_user_projects(
 
 - `Ok(Vec<ProjectV2>)` - List of projects
 - `Err(ApiError::NotFound)` - User not found
-- `Err(ApiError::Forbidden)` - Insufficient permissions (private projects)
+- `Err(ApiError::AuthorizationFailed)` - Insufficient permissions (private projects)
 - `Err(ApiError)` - Other errors
 
 **Behavior**:
@@ -233,7 +233,7 @@ pub async fn get_project(
 
 - `Ok(ProjectV2)` - Project details
 - `Err(ApiError::NotFound)` - Project not found
-- `Err(ApiError::Forbidden)` - Insufficient permissions
+- `Err(ApiError::AuthorizationFailed)` - Insufficient permissions
 - `Err(ApiError)` - Other errors
 
 **Behavior**:
@@ -333,10 +333,11 @@ pub async fn get_issue_linked_projects(
 
 **Behavior**:
 
-1. Send a GraphQL `repository(owner, name) { issue(number) { projectsV2(first: 20) { nodes { ... } } } }` query
+1. Send a paginated GraphQL `repository(owner, name) { issue(number) { projectsV2(first: 20, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { ... } } } }` query
 2. If the repository or issue does not exist, GitHub GraphQL returns `type: "NOT_FOUND"` in `.errors[]` — surface this as `ApiError::NotFound`
-3. Map each node in `projectsV2.nodes` to a `ProjectV2` struct (populating all fields including owner)
-4. Return an empty `Vec` when the issue exists but is not linked to any projects
+3. Loop through pages: after each response, if `pageInfo.hasNextPage` is true, issue a follow-up query with `after: endCursor`; stop when `hasNextPage` is false
+4. Map each node across all pages to a `ProjectV2` struct (populating all fields including owner)
+5. Return an empty `Vec` when the issue exists but is not linked to any projects
 
 **Example**:
 
@@ -408,10 +409,10 @@ The REST API provides basic project and item management. For full Projects v2 fu
 All operations return `Result<T, ApiError>` with these common errors:
 
 - `ApiError::NotFound` - Project, organization, or content not found
-- `ApiError::Forbidden` - Insufficient permissions to access or modify project
-- `ApiError::ValidationFailed` - Invalid request (e.g., content already in project)
-- `ApiError::RateLimited` - API rate limit exceeded
-- `ApiError::NetworkError` - HTTP request failed
+- `ApiError::AuthorizationFailed` - Insufficient permissions to access or modify project
+- `ApiError::GraphQlError` - GraphQL-level error (e.g., content already in project, malformed response)
+- `ApiError::RateLimitExceeded` - API rate limit exceeded
+- `ApiError::HttpClientError` - HTTP transport error
 
 ## Permissions
 

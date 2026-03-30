@@ -233,13 +233,14 @@ mod get_issue_linked_projects_tests {
             .unwrap()
     }
 
-    /// Stub GraphQL response for an issue linked to one project.
+    /// Stub GraphQL response for an issue linked to one project (single page).
     fn linked_projects_response() -> serde_json::Value {
         serde_json::json!({
             "data": {
                 "repository": {
                     "issue": {
                         "projectsV2": {
+                            "pageInfo": { "hasNextPage": false, "endCursor": null },
                             "nodes": [
                                 {
                                     "id": "PVT_kwDOAE1L0M4AA1qJ",
@@ -273,7 +274,78 @@ mod get_issue_linked_projects_tests {
                 "repository": {
                     "issue": {
                         "projectsV2": {
+                            "pageInfo": { "hasNextPage": false, "endCursor": null },
                             "nodes": []
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    /// First page: one project with hasNextPage true.
+    fn first_page_response() -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "repository": {
+                    "issue": {
+                        "projectsV2": {
+                            "pageInfo": {
+                                "hasNextPage": true,
+                                "endCursor": "cursor_page2"
+                            },
+                            "nodes": [{
+                                "id": "PVT_kwDOAE1L0M4AA1qJ",
+                                "databaseId": 12345,
+                                "number": 1,
+                                "title": "Sprint Board",
+                                "description": "Sprint tracking project",
+                                "public": true,
+                                "url": "https://github.com/orgs/octocat/projects/1",
+                                "createdAt": "2022-04-28T16:30:00Z",
+                                "updatedAt": "2022-04-29T08:00:00Z",
+                                "owner": {
+                                    "login": "octocat",
+                                    "type": "Organization",
+                                    "id": "MDEyOk9yZ2FuaXphdGlvbjE=",
+                                    "databaseId": 1
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    /// Second page: one project with hasNextPage false.
+    fn second_page_response() -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "repository": {
+                    "issue": {
+                        "projectsV2": {
+                            "pageInfo": {
+                                "hasNextPage": false,
+                                "endCursor": null
+                            },
+                            "nodes": [{
+                                "id": "PVT_kwDOAE1L0M4AA2rK",
+                                "databaseId": 67890,
+                                "number": 2,
+                                "title": "Backlog",
+                                "description": null,
+                                "public": false,
+                                "url": "https://github.com/orgs/octocat/projects/2",
+                                "createdAt": "2022-05-01T10:00:00Z",
+                                "updatedAt": "2022-05-02T09:00:00Z",
+                                "owner": {
+                                    "login": "octocat",
+                                    "type": "Organization",
+                                    "id": "MDEyOk9yZ2FuaXphdGlvbjE=",
+                                    "databaseId": 1
+                                }
+                            }]
                         }
                     }
                 }
@@ -406,6 +478,46 @@ mod get_issue_linked_projects_tests {
             result.unwrap_err(),
             ApiError::AuthenticationFailed
         ));
+    }
+
+    /// Verify get_issue_linked_projects fetches all pages when results span multiple pages.
+    ///
+    /// When `pageInfo.hasNextPage` is true, the function must issue a follow-up query
+    /// with the `endCursor`, continuing until `hasNextPage` is false. The combined
+    /// results from all pages are returned in a single Vec.
+    #[tokio::test]
+    async fn test_returns_all_projects_across_multiple_pages() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+
+        // First call → page 1, hasNextPage true
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(first_page_response()))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        // Second call → page 2, hasNextPage false
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(second_page_response()))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .get_issue_linked_projects("octocat", "Hello-World", 42)
+            .await;
+
+        assert!(result.is_ok(), "expected Ok, got {:?}", result);
+        let projects = result.unwrap();
+        assert_eq!(projects.len(), 2, "expected 2 projects across 2 pages");
+        assert_eq!(projects[0].id, 12345);
+        assert_eq!(projects[0].title, "Sprint Board");
+        assert_eq!(projects[1].id, 67890);
+        assert_eq!(projects[1].title, "Backlog");
     }
 }
 
@@ -701,5 +813,104 @@ mod add_item_to_project_tests {
             result.unwrap_err(),
             ApiError::AuthenticationFailed
         ));
+    }
+
+    /// Verify add_item_to_project returns ApiError::GraphQlError when the mutation
+    /// response is missing the required `type` field on the returned item.
+    ///
+    /// `type` is always selected by the mutation; its absence indicates an unexpected
+    /// API shape change and must be surfaced as an error rather than silently defaulting.
+    #[tokio::test]
+    async fn test_returns_error_when_item_type_missing() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+        let project_node_id = "PVT_kwDOAE1L0M4AA1qJ";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(org_lookup_response(project_node_id)),
+            )
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "addProjectV2ItemById": {
+                        "item": {
+                            "id": "PVTI_lADOAE1L0M4AA1qJzgDeF2s",
+                            "createdAt": "2022-04-28T16:30:00Z",
+                            "updatedAt": "2022-04-28T16:31:00Z",
+                            "content": { "id": "I_kwDOAE1L0M5abc123" }
+                        }
+                    }
+                }
+            })))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ApiError::GraphQlError { .. }),
+            "expected GraphQlError for missing item type field"
+        );
+    }
+
+    /// Verify add_item_to_project returns ApiError::GraphQlError when the mutation
+    /// response is missing the `createdAt` timestamp on the returned item.
+    ///
+    /// Timestamps are always selected by the mutation; their absence indicates an
+    /// unexpected API shape change and must be surfaced as an error.
+    #[tokio::test]
+    async fn test_returns_error_when_item_timestamps_missing() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+        let project_node_id = "PVT_kwDOAE1L0M4AA1qJ";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(org_lookup_response(project_node_id)),
+            )
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "addProjectV2ItemById": {
+                        "item": {
+                            "id": "PVTI_lADOAE1L0M4AA1qJzgDeF2s",
+                            "type": "ISSUE",
+                            "content": { "id": "I_kwDOAE1L0M5abc123" }
+                        }
+                    }
+                }
+            })))
+            .up_to_n_times(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ApiError::GraphQlError { .. }),
+            "expected GraphQlError for missing item timestamps"
+        );
     }
 }

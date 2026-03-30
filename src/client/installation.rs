@@ -446,9 +446,8 @@ impl InstallationClient {
         query: &str,
         variables: V,
     ) -> Result<serde_json::Value, ApiError> {
-        let body_json =
-            serde_json::to_value(serde_json::json!({ "query": query, "variables": variables }))
-                .map_err(ApiError::JsonError)?;
+        // json! already returns Value; no outer to_value needed.
+        let body_json = serde_json::json!({ "query": query, "variables": variables });
 
         let response = self
             .execute_with_retry("POST graphql", || async {
@@ -486,6 +485,12 @@ impl InstallationClient {
                     message: first_message.to_string(),
                 });
             }
+            // Errors present but neither NOT_FOUND type nor a parseable message field
+            // (e.g. {"type": "FORBIDDEN"} with no message). Surface a generic error
+            // rather than silently falling through to the data check.
+            return Err(ApiError::GraphQlError {
+                message: "GraphQL response contained errors".to_string(),
+            });
         }
 
         if payload.get("data").is_none_or(|v| v.is_null()) {

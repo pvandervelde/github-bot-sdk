@@ -92,10 +92,14 @@ pub struct AddProjectV2ItemRequest {
 // ---------------------------------------------------------------------------
 
 const GET_ISSUE_LINKED_PROJECTS_QUERY: &str = r#"
-query GetIssueLinkedProjects($owner: String!, $repo: String!, $number: Int!) {
+query GetIssueLinkedProjects($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
-      projectsV2(first: 20) {
+      projectsV2(first: 20, after: $cursor) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         nodes {
           id
           databaseId
@@ -309,20 +313,32 @@ impl InstallationClient {
         let content_type = item
             .get("type")
             .and_then(|v| v.as_str())
-            .unwrap_or("ISSUE")
+            .ok_or_else(|| ApiError::GraphQlError {
+                message: "project item missing type field".to_string(),
+            })?
             .to_string();
 
         let created_at: DateTime<Utc> = item
             .get("createdAt")
             .and_then(|v| v.as_str())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(Utc::now);
+            .ok_or_else(|| ApiError::GraphQlError {
+                message: "project item missing createdAt field".to_string(),
+            })?
+            .parse()
+            .map_err(|_| ApiError::GraphQlError {
+                message: "project item createdAt is not a valid timestamp".to_string(),
+            })?;
 
         let updated_at: DateTime<Utc> = item
             .get("updatedAt")
             .and_then(|v| v.as_str())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(Utc::now);
+            .ok_or_else(|| ApiError::GraphQlError {
+                message: "project item missing updatedAt field".to_string(),
+            })?
+            .parse()
+            .map_err(|_| ApiError::GraphQlError {
+                message: "project item updatedAt is not a valid timestamp".to_string(),
+            })?;
 
         // content.id is the node ID of the linked issue or PR.
         let linked_content_node_id = item
@@ -357,7 +373,9 @@ impl InstallationClient {
     ) -> Result<String, ApiError> {
         let variables = serde_json::json!({
             "owner": owner,
-            "number": project_number,
+            // Cast to i64: GraphQL Int! is 32-bit signed; realistic project numbers
+            // are well within that range.
+            "number": project_number as i64,
         });
 
         // Try organisation first.
@@ -399,6 +417,8 @@ impl InstallationClient {
     ///
     /// Queries the GitHub GraphQL API for all Projects v2 that contain the given issue.
     /// Returns an empty `Vec` when the issue exists but is not linked to any projects.
+    /// Results are fetched in pages of 20; all pages are retrieved automatically and
+    /// returned as a single combined `Vec`.
     ///
     /// # Arguments
     ///
@@ -408,7 +428,7 @@ impl InstallationClient {
     ///
     /// # Returns
     ///
-    /// - `Ok(Vec<ProjectV2>)` — projects linked to the issue (may be empty)
+    /// - `Ok(Vec<ProjectV2>)` — all projects linked to the issue (may be empty)
     /// - `Err(ApiError::NotFound)` — repository or issue does not exist
     /// - `Err(ApiError::AuthenticationFailed)` — token is invalid
     /// - `Err(ApiError)` — other transport or GraphQL errors
@@ -418,29 +438,54 @@ impl InstallationClient {
         repo: &str,
         issue_number: u64,
     ) -> Result<Vec<ProjectV2>, ApiError> {
-        let variables = serde_json::json!({
-            "owner": owner,
-            "repo": repo,
-            "number": issue_number,
-        });
+        let mut all_projects = Vec::new();
+        let mut cursor: Option<String> = None;
 
-        let data = self
-            .post_graphql(GET_ISSUE_LINKED_PROJECTS_QUERY, variables)
-            .await?;
+        loop {
+            let variables = serde_json::json!({
+                "owner": owner,
+                "repo": repo,
+                // Cast to i64: GraphQL Int! is 32-bit signed; realistic issue numbers
+                // are well within that range.
+                "number": issue_number as i64,
+                "cursor": cursor,
+            });
 
-        let nodes = data
-            .get("repository")
-            .and_then(|r| r.get("issue"))
-            .and_then(|i| i.get("projectsV2"))
-            .and_then(|p| p.get("nodes"))
-            .and_then(|n| n.as_array());
+            let data = self
+                .post_graphql(GET_ISSUE_LINKED_PROJECTS_QUERY, variables)
+                .await?;
 
-        let projects = match nodes {
-            Some(arr) => arr.iter().filter_map(map_project_node).collect(),
-            None => Vec::new(),
-        };
+            let projects_v2 = match data
+                .get("repository")
+                .and_then(|r| r.get("issue"))
+                .and_then(|i| i.get("projectsV2"))
+            {
+                Some(pv2) => pv2,
+                None => break,
+            };
 
-        Ok(projects)
+            if let Some(nodes) = projects_v2.get("nodes").and_then(|n| n.as_array()) {
+                all_projects.extend(nodes.iter().filter_map(map_project_node));
+            }
+
+            let has_next_page = projects_v2
+                .get("pageInfo")
+                .and_then(|p| p.get("hasNextPage"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            if !has_next_page {
+                break;
+            }
+
+            cursor = projects_v2
+                .get("pageInfo")
+                .and_then(|p| p.get("endCursor"))
+                .and_then(|v| v.as_str())
+                .map(String::from);
+        }
+
+        Ok(all_projects)
     }
 
     /// Remove an item from a project.

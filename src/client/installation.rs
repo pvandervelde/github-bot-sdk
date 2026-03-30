@@ -471,9 +471,10 @@ impl InstallationClient {
         // GraphQL returns HTTP 200 even for errors; check .errors[] first.
         if let Some(errors) = payload.get("errors").and_then(|e| e.as_array()) {
             // NOT_FOUND type maps directly to ApiError::NotFound.
-            if errors.iter().any(|e| {
-                e.get("type").and_then(|t| t.as_str()) == Some("NOT_FOUND")
-            }) {
+            if errors
+                .iter()
+                .any(|e| e.get("type").and_then(|t| t.as_str()) == Some("NOT_FOUND"))
+            {
                 return Err(ApiError::NotFound);
             }
             if let Some(first_message) = errors

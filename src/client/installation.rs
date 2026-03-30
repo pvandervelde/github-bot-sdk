@@ -436,6 +436,8 @@ impl InstallationClient {
     /// # Errors
     ///
     /// - `ApiError::GraphQlError` — GitHub returned `.errors` in the body
+    /// - `ApiError::GraphQlError` — response body contains neither `.errors` nor a
+    ///   non-null `.data` field (malformed or unexpected response shape)
     /// - `ApiError::AuthenticationFailed` — HTTP 401
     /// - `ApiError::JsonError` — response body could not be parsed
     /// - Any other `ApiError` variant for HTTP-level failures
@@ -485,7 +487,7 @@ impl InstallationClient {
             }
         }
 
-        if !payload.get("data").is_some_and(|v| !v.is_null()) {
+        if payload.get("data").is_none_or(|v| v.is_null()) {
             return Err(ApiError::GraphQlError {
                 message: "GraphQL response missing `data` field".to_string(),
             });

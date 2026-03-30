@@ -63,18 +63,6 @@ mod project_operations {
     }
 
     #[tokio::test]
-    #[ignore = "TODO: Mock: POST /projects/:id/items"]
-    async fn test_add_item_to_project() {
-        todo!("Mock: POST /projects/:id/items")
-    }
-
-    #[tokio::test]
-    #[ignore = "TODO: Mock: 422 validation error"]
-    async fn test_add_item_already_in_project() {
-        todo!("Mock: 422 validation error")
-    }
-
-    #[tokio::test]
     #[ignore = "TODO: Mock: DELETE /projects/:id/items/:item_id"]
     async fn test_remove_item_from_project() {
         todo!("Mock: DELETE /projects/:id/items/:item_id")

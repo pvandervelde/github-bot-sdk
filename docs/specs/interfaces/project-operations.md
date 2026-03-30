@@ -277,10 +277,10 @@ pub async fn add_item_to_project(
 **Returns**:
 
 - `Ok(ProjectV2Item)` - Created project item
-- `Err(ApiError::NotFound)` - Project or content not found
-- `Err(ApiError::Forbidden)` - Insufficient permissions
-- `Err(ApiError::ValidationFailed)` - Invalid content type or already added
-- `Err(ApiError)` - Other errors
+- `Err(ApiError::NotFound)` - Project not found for this owner
+- `Err(ApiError::AuthorizationFailed)` - No write access to the project
+- `Err(ApiError::GraphQlError { .. })` - Mutation error (e.g., content already in project)
+- `Err(ApiError)` - Other transport errors
 
 **Behavior**:
 

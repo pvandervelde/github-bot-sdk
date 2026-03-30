@@ -353,6 +353,17 @@ mod get_issue_linked_projects_tests {
         })
     }
 
+    /// Stub GraphQL response where the issue field is null (issue number not found).
+    fn null_issue_response() -> serde_json::Value {
+        serde_json::json!({
+            "data": {
+                "repository": {
+                    "issue": null
+                }
+            }
+        })
+    }
+
     /// Stub GraphQL NOT_FOUND error response.
     fn not_found_response() -> serde_json::Value {
         serde_json::json!({
@@ -518,6 +529,34 @@ mod get_issue_linked_projects_tests {
         assert_eq!(projects[0].title, "Sprint Board");
         assert_eq!(projects[1].id, 67890);
         assert_eq!(projects[1].title, "Backlog");
+    }
+
+    /// Verify get_issue_linked_projects returns ApiError::NotFound when the issue is null.
+    ///
+    /// GitHub GraphQL returns `"issue": null` (not an error in `.errors[]`) when the issue
+    /// number does not exist in a repository that does exist. The function must surface
+    /// this as ApiError::NotFound, not Ok(vec![]).
+    #[tokio::test]
+    async fn test_returns_not_found_when_issue_is_null() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(null_issue_response()))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .get_issue_linked_projects("octocat", "Hello-World", 9999)
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ApiError::NotFound),
+            "expected ApiError::NotFound when issue field is null"
+        );
     }
 }
 

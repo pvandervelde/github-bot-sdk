@@ -376,7 +376,7 @@ pub async fn remove_item_from_project(
 
 - `Ok(())` - Item removed successfully
 - `Err(ApiError::NotFound)` - Project or item not found
-- `Err(ApiError::Forbidden)` - Insufficient permissions
+- `Err(ApiError::AuthorizationFailed)` - Insufficient permissions
 - `Err(ApiError)` - Other errors
 
 **Behavior**:

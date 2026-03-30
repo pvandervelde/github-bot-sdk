@@ -455,11 +455,18 @@ impl InstallationClient {
                 .post_graphql(GET_ISSUE_LINKED_PROJECTS_QUERY, variables)
                 .await?;
 
-            let projects_v2 = match data
+            let issue_node = data
                 .get("repository")
-                .and_then(|r| r.get("issue"))
-                .and_then(|i| i.get("projectsV2"))
-            {
+                .and_then(|r| r.get("issue"));
+
+            // GitHub returns `"issue": null` (not a GraphQL error) when the issue
+            // number does not exist in the repository. Surface this as NotFound so
+            // callers can distinguish it from "issue exists with no projects".
+            if issue_node.is_none_or(|v| v.is_null()) {
+                return Err(ApiError::NotFound);
+            }
+
+            let projects_v2 = match issue_node.and_then(|i| i.get("projectsV2")) {
                 Some(pv2) => pv2,
                 None => break,
             };

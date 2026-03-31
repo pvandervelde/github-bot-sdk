@@ -414,6 +414,94 @@ impl InstallationClient {
         .await
     }
 
+    /// Make an authenticated POST request to the GitHub GraphQL API.
+    ///
+    /// GitHub's GraphQL endpoint always returns HTTP 200 even for errors.
+    /// Application-level errors are detected by checking the `.errors`
+    /// array in the response body; the first error message is surfaced as
+    /// `ApiError::GraphQlError`. On success, the `.data` value is returned.
+    ///
+    /// Retry logic (backoff, 5xx, rate-limit handling) is identical to the
+    /// REST helpers because the transport layer is the same.
+    ///
+    /// # Arguments
+    ///
+    /// * `query`     - GraphQL query or mutation string
+    /// * `variables` - Variables object (serialised to JSON)
+    ///
+    /// # Returns
+    ///
+    /// Returns the `data` field from the GraphQL response as a `serde_json::Value`.
+    ///
+    /// # Errors
+    ///
+    /// - `ApiError::GraphQlError` — GitHub returned `.errors` in the body
+    /// - `ApiError::GraphQlError` — response body contains neither `.errors` nor a
+    ///   non-null `.data` field (malformed or unexpected response shape)
+    /// - `ApiError::AuthenticationFailed` — HTTP 401
+    /// - `ApiError::JsonError` — response body could not be parsed
+    /// - Any other `ApiError` variant for HTTP-level failures
+    pub async fn post_graphql<V: serde::Serialize>(
+        &self,
+        query: &str,
+        variables: V,
+    ) -> Result<serde_json::Value, ApiError> {
+        // json! already returns Value; no outer to_value needed.
+        let body_json = serde_json::json!({ "query": query, "variables": variables });
+
+        let response = self
+            .execute_with_retry("POST graphql", || async {
+                let (token, url) = self.prepare_request("graphql", "POST").await?;
+                self.client
+                    .http_client()
+                    .post(&url)
+                    .header("Authorization", format!("Bearer {}", token))
+                    .header("Accept", "application/vnd.github+json")
+                    .json(&body_json)
+                    .send()
+                    .await
+                    .map_err(ApiError::HttpClientError)
+            })
+            .await?;
+
+        let payload: serde_json::Value =
+            response.json().await.map_err(ApiError::HttpClientError)?;
+
+        // GraphQL returns HTTP 200 even for errors; check .errors[] first.
+        if let Some(errors) = payload.get("errors").and_then(|e| e.as_array()) {
+            // NOT_FOUND type maps directly to ApiError::NotFound.
+            if errors
+                .iter()
+                .any(|e| e.get("type").and_then(|t| t.as_str()) == Some("NOT_FOUND"))
+            {
+                return Err(ApiError::NotFound);
+            }
+            if let Some(first_message) = errors
+                .first()
+                .and_then(|e| e.get("message"))
+                .and_then(|m| m.as_str())
+            {
+                return Err(ApiError::GraphQlError {
+                    message: first_message.to_string(),
+                });
+            }
+            // Errors present but neither NOT_FOUND type nor a parseable message field
+            // (e.g. {"type": "FORBIDDEN"} with no message). Surface a generic error
+            // rather than silently falling through to the data check.
+            return Err(ApiError::GraphQlError {
+                message: "GraphQL response contained errors".to_string(),
+            });
+        }
+
+        if payload.get("data").is_none_or(|v| v.is_null()) {
+            return Err(ApiError::GraphQlError {
+                message: "GraphQL response missing `data` field".to_string(),
+            });
+        }
+
+        Ok(payload["data"].clone())
+    }
+
     /// Make an authenticated PATCH request to the GitHub API.
     ///
     /// Includes automatic retry logic for transient errors.

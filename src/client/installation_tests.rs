@@ -1036,6 +1036,296 @@ mod retry_logic_tests {
 }
 
 // ============================================================================
+// GraphQL Transport Tests
+// ============================================================================
+
+mod post_graphql_tests {
+    use super::*;
+
+    /// Helper to build a test client pointing at the mock server.
+    async fn make_client(mock_server: &MockServer, token: &str) -> InstallationClient {
+        let auth = MockAuthProvider::new_with_token(token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap()
+    }
+
+    /// Verify post_graphql returns the `data` field on a successful response.
+    ///
+    /// GitHub GraphQL always responds with HTTP 200. When no `.errors` key is
+    /// present the `.data` value must be returned to the caller.
+    #[tokio::test]
+    async fn test_post_graphql_success() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .and(header("Authorization", format!("Bearer {}", token)))
+            .and(header("Accept", "application/vnd.github+json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": { "foo": "bar" }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client.post_graphql("{ foo }", serde_json::json!({})).await;
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert_eq!(data["foo"], "bar");
+    }
+
+    /// Verify post_graphql returns ApiError::GraphQlError when the body contains `.errors`.
+    ///
+    /// GitHub GraphQL surfaces application-level errors inside `.errors[]`
+    /// while still returning HTTP 200. The first error message must be
+    /// mapped to ApiError::GraphQlError.
+    #[tokio::test]
+    async fn test_post_graphql_graphql_error() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "errors": [
+                    { "message": "Field does not exist on type 'Query'" }
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .post_graphql("{ nonexistentField }", serde_json::json!({}))
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::GraphQlError { message } => {
+                assert_eq!(message, "Field does not exist on type 'Query'");
+            }
+            other => panic!("Expected GraphQlError, got: {:?}", other),
+        }
+    }
+
+    /// Verify post_graphql returns ApiError::AuthenticationFailed on HTTP 401.
+    ///
+    /// Even though the GraphQL endpoint is expected to return 200, a 401
+    /// can be returned when the token is invalid. The existing HTTP error
+    /// mapping must apply here exactly as it does for REST endpoints.
+    #[tokio::test]
+    async fn test_post_graphql_http_401() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, "bad-token").await;
+        let result = client
+            .post_graphql("{ viewer { login } }", serde_json::json!({}))
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::AuthenticationFailed
+        ));
+    }
+
+    /// Verify post_graphql sets the Authorization: Bearer header correctly.
+    ///
+    /// The same installation token used by REST helpers must be forwarded on
+    /// GraphQL requests.
+    #[tokio::test]
+    async fn test_post_graphql_uses_bearer_token() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_specific_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .and(header("Authorization", format!("Bearer {}", token)))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {}
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let _ = client
+            .post_graphql("{ viewer { login } }", serde_json::json!({}))
+            .await
+            .unwrap();
+        // wiremock expectation verifies the header was sent exactly once
+    }
+
+    /// Verify post_graphql retries on HTTP 500 and succeeds on the second attempt.
+    ///
+    /// The retry logic wrapping the GraphQL transport must behave identically
+    /// to the REST helpers — transient 5xx errors should be retried.
+    #[tokio::test]
+    async fn test_post_graphql_http_500_retries() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc as StdArc;
+
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+        let counter = StdArc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(move |_req: &wiremock::Request| {
+                let attempt = counter_clone.fetch_add(1, Ordering::SeqCst);
+                if attempt == 0 {
+                    ResponseTemplate::new(500).set_body_string("Internal Server Error")
+                } else {
+                    ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                        "data": { "ok": true }
+                    }))
+                }
+            })
+            .expect(2)
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .post_graphql("{ viewer { login } }", serde_json::json!({}))
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
+    }
+
+    /// Verify post_graphql maps GraphQL NOT_FOUND errors to ApiError::NotFound.
+    ///
+    /// GitHub GraphQL uses `type: "NOT_FOUND"` in the errors array when a repository
+    /// or other resource does not exist. This must translate to ApiError::NotFound so
+    /// callers can handle missing resources the same way as REST 404 responses.
+    #[tokio::test]
+    async fn test_post_graphql_not_found_error() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "errors": [
+                    {
+                        "type": "NOT_FOUND",
+                        "message": "Could not resolve to a Repository with the name 'owner/repo'."
+                    }
+                ]
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .post_graphql(
+                "{ repository(owner: \"owner\", name: \"repo\") { id } }",
+                serde_json::json!({}),
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(
+            matches!(result.unwrap_err(), ApiError::NotFound),
+            "Expected ApiError::NotFound for GraphQL NOT_FOUND error type"
+        );
+    }
+
+    /// Verify post_graphql returns ApiError::GraphQlError when errors contains a typed
+    /// error with no `message` field.
+    ///
+    /// GitHub may return `{"type": "FORBIDDEN"}` (or similar) in the errors array without
+    /// a `message` key. Previously this fell through silently; the catch-all must surface
+    /// it as a generic GraphQlError so callers always see an error.
+    #[tokio::test]
+    async fn test_post_graphql_error_type_without_message() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "errors": [{ "type": "FORBIDDEN" }],
+                "data": { "viewer": { "login": "octocat" } }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .post_graphql("{ viewer { login } }", serde_json::json!({}))
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::GraphQlError { message } => {
+                assert!(
+                    message.contains("errors"),
+                    "expected message to mention 'errors', got: {message}"
+                );
+            }
+            other => panic!(
+                "Expected GraphQlError for typed error without message, got: {:?}",
+                other
+            ),
+        }
+    }
+
+    /// Verify post_graphql returns ApiError::GraphQlError when the response has neither
+    /// `errors` nor a non-null `data` field.
+    ///
+    /// A malformed or unexpected GraphQL response body that contains neither `.errors`
+    /// nor a non-null `.data` field must return a clear `ApiError::GraphQlError` rather
+    /// than silently returning `Value::Null` to callers.
+    #[tokio::test]
+    async fn test_post_graphql_missing_data_field() {
+        let mock_server = MockServer::start().await;
+        let token = "ghs_graphql_token";
+
+        Mock::given(method("POST"))
+            .and(path("/graphql"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock_server)
+            .await;
+
+        let client = make_client(&mock_server, token).await;
+        let result = client
+            .post_graphql("{ viewer { login } }", serde_json::json!({}))
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ApiError::GraphQlError { message } => {
+                assert!(
+                    message.contains("data"),
+                    "expected error message to mention 'data', got: {message}"
+                );
+            }
+            other => panic!(
+                "Expected GraphQlError for missing data field, got: {:?}",
+                other
+            ),
+        }
+    }
+}
+
+// ============================================================================
 // Comprehensive Rate Limiting and Retry Integration Tests
 // ============================================================================
 

@@ -7,7 +7,7 @@ on:
 
 # Prevent concurrent runs from creating duplicate or conflicting PRs.
 concurrency:
-    group: release-plz-pr-${{ github.ref }}
+    group: release-plz-${{ github.ref }}
     cancel-in-progress: false
 
 jobs:

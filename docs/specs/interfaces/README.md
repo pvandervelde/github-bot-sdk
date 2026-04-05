@@ -1,83 +1,138 @@
 # GitHub Bot SDK Interface Specifications
 
-This directory contains detailed interface specifications for the GitHub Bot SDK installation-level client operations. Each specification defines type signatures, function contracts, error conditions, and usage examples.
+This directory contains detailed interface specifications for the GitHub Bot SDK
+installation-level client operations. Each specification defines type signatures,
+function contracts, error conditions, and usage examples.
 
-## Overview
+## Architecture: Domain Sub-Clients (ADR-003)
 
-The installation-level client provides authenticated access to GitHub API operations scoped to a specific app installation. All operations use installation tokens (not JWTs) and respect GitHub's rate limiting and permissions.
+All GitHub API operations are grouped into **domain sub-clients** accessed via factory
+methods on `InstallationClient`. Each sub-client is cheap to construct (no API call,
+at most an `Arc` increment) and contains flat methods (no further nesting).
+
+```rust
+// All operations accessed through dedicated sub-clients
+client.issues().list("owner", "repo", state, page).await?;
+client.pull_requests().merge("owner", "repo", 42, None).await?;
+client.labels().create("owner", "repo", req).await?;
+client.milestones().list("owner", "repo", None).await?;
+client.repositories().get_branch("owner", "repo", "main").await?;
+client.workflows().trigger("owner", "repo", "ci.yml", req).await?;
+client.releases().get_latest("owner", "repo").await?;
+client.projects().list_for_issue("owner", "repo", 42).await?;
+```
 
 ## Interface Documents
 
 ### Core Client
 
-- **[installation-client.md](./installation-client.md)** - InstallationClient foundation
-  - Client struct definition
-  - Factory methods
+- **[installation-client.md](./installation-client.md)** — `InstallationClient` foundation
+  - Client struct definition and thread-safety guarantees
   - Generic request helpers (GET, POST, PUT, DELETE, PATCH)
+  - **Domain sub-client factory methods** (`issues()`, `pull_requests()`, `labels()`, etc.)
   - Token exchange integration
 
-### Repository Operations
+### Issue Domain
 
-- **[repository-operations.md](./repository-operations.md)** - Repository and branch management
-  - Repository information retrieval
-  - Branch operations (list, get, create, delete)
-  - Git reference management (tags, branches)
-  - Repository metadata updates
+- **[issue-operations.md](./issue-operations.md)** — `IssuesClient`
+  - Issue CRUD (`list`, `get`, `create`, `update`)
+  - Comments (`list_comments`, `get_comment`, `create_comment`, `update_comment`, `delete_comment`)
+  - Label application (`list_labels`, `add_labels`, `remove_label`, `replace_labels`)
+  - Reactions on issues and comments (6 methods)
+  - Assignees (`list_available_assignees`, `add_assignees`, `remove_assignees`)
+  - Lock / unlock
+  - Timeline and activity events (`list_timeline`, `list_activity_events`)
+  - Milestone assignment (`set_milestone`)
 
-### Issue and PR Operations
+- **[labels-client.md](./labels-client.md)** — `LabelsClient`
+  - Repository-level label catalogue (`list`, `get`, `create`, `update`, `delete`)
+  - *Applying* labels to issues: use `IssuesClient`; to PRs: use `PullRequestsClient`
 
-- **[issue-operations.md](./issue-operations.md)** - GitHub issue management
-  - Issue CRUD operations
-  - Issue comments
-  - Label management (create, update, delete)
-  - Issue state transitions
+- **[milestones-client.md](./milestones-client.md)** — `MilestonesClient`
+  - Milestone lifecycle (`list`, `get`, `create`, `update`, `delete`)
+  - *Assigning* milestones to issues/PRs: use `IssuesClient::set_milestone` / `PullRequestsClient::set_milestone`
 
-- **[pull-request-operations.md](./pull-request-operations.md)** - Pull request operations
-  - PR CRUD operations
-  - Review management
-  - PR comments and discussions
-  - Merge operations
+### Pull Request Domain
 
-### Cross-Domain Operations
+- **[pull-request-operations.md](./pull-request-operations.md)** — `PullRequestsClient`
+  - PR CRUD (`list`, `get`, `create`, `update`, `merge`)
+  - Reviews (`list_reviews`, `get_review`, `create_review`, `update_review`, `dismiss_review`)
+  - Comments (`list_comments`, `create_comment`, `update_comment`, `delete_comment`)
+  - Label application (`add_labels`, `remove_label`)
+  - Milestone assignment (`set_milestone`)
 
-- **[project-operations.md](./project-operations.md)** - GitHub Projects V2 management
-  - Project listing and retrieval
-  - Project item management
-  - Owner-scoped operations (user/organization)
+### Repository Domain
 
-- **[additional-operations.md](./additional-operations.md)** - Milestone, Workflow, and Release operations
-  - Milestone CRUD and associations
-  - GitHub Actions workflow triggers
-  - Release and asset management
+- **[repository-operations.md](./repository-operations.md)** — `RepositoriesClient`
+  - Repository metadata (`get`)
+  - Branches (`list_branches`, `get_branch`, `create_branch`)
+  - Git references (`get_ref`, `create_ref`, `update_ref`, `delete_ref`)
+  - Tags (`list_tags`, `create_tag`)
+  - Commits (`get_commit`, `list_commits`, `compare`)
+
+### Additional Domains
+
+- **[project-operations.md](./project-operations.md)** — `ProjectsClient`
+  - GitHub Projects V2 (`list_for_org`, `list_for_user`, `get`, `add_item`, `remove_item`, `list_for_issue`)
+
+- **[additional-operations.md](./additional-operations.md)** — `WorkflowsClient` and `ReleasesClient`
+  - Workflows: `list`, `get`, `trigger`, `list_runs`, `get_run`, `cancel_run`, `rerun_run`
+  - Releases: `list`, `get`, `get_latest`, `get_by_tag`, `create`, `update`, `delete`
+
+- **[reactions.md](./reactions.md)** — `ReactionContent` and `Reaction` types
+  - Shared types used by `IssuesClient` reaction methods
+  - 8 reaction variants with serde rename constraints
 
 ### Infrastructure
 
-- **[pagination.md](./pagination.md)** - Pagination support
-  - PagedResponse generic type
+- **[pagination.md](./pagination.md)** — Pagination support
+  - `PagedResponse<T>` generic type
   - Link header parsing
-  - Page navigation helpers
+  - Auto-pagination helper (ADR-002)
 
-- **[rate-limiting-retry.md](./rate-limiting-retry.md)** - Rate limiting and retry logic
+- **[rate-limiting-retry.md](./rate-limiting-retry.md)** — Rate limiting and retry logic
   - Installation-level rate tracking
   - Exponential backoff with jitter
   - 429 and 403 handling
-  - Retry policy configuration
 
 ## Dependency Graph
 
 ```
-installation-client (foundation)
-    ↓
-├── repository-operations
-├── issue-operations
-├── pull-request-operations
-├── project-operations
-└── additional-operations (milestone, workflow, release)
-    ↓
-pagination (enhances list operations)
-    ↓
-rate-limiting-retry (integrates with all operations)
+InstallationClient (foundation)
+    │
+    ├── issues()         → IssuesClient      (issue.rs)
+    ├── labels()         → LabelsClient       (issue.rs)
+    ├── milestones()     → MilestonesClient   (issue.rs)
+    ├── pull_requests()  → PullRequestsClient (pull_request.rs)
+    ├── repositories()   → RepositoriesClient (repository.rs + commit.rs)
+    ├── workflows()      → WorkflowsClient    (workflow.rs)
+    ├── releases()       → ReleasesClient     (release.rs)
+    └── projects()       → ProjectsClient     (project.rs)
+                               │
+                    PagedResponse<T> (pagination.rs)
+                    Rate-limit + retry (rate_limit.rs + retry.rs)
 ```
+
+## Method Naming Conventions
+
+Methods on sub-clients drop the domain noun from their name because the sub-client
+provides the context:
+
+| Old flat API | New sub-client API |
+|---|---|
+| `client.list_issues(...)` | `client.issues().list(...)` |
+| `client.get_issue_comment(...)` | `client.issues().get_comment(...)` |
+| `client.list_labels(...)` | `client.labels().list(...)` |
+| `client.add_labels_to_issue(...)` | `client.issues().add_labels(...)` |
+| `client.get_git_ref(...)` | `client.repositories().get_ref(...)` |
+| `client.list_pull_request_reviews(...)` | `client.pull_requests().list_reviews(...)` |
+| `client.get_latest_release(...)` | `client.releases().get_latest(...)` |
+
+## ADR References
+
+- **ADR-001**: Hexagonal architecture — why business logic is separated from GitHub API adapters
+- **ADR-002**: Auto-pagination strategy — which operations use `Vec<T>` vs `PagedResponse<T>`
+- **ADR-003**: Sub-client API pattern — why domain sub-clients instead of flat methods
 
 ## Architectural Location
 
@@ -92,15 +147,19 @@ All installation client interfaces are part of the **GitHub Bot SDK** library:
 
 Types are organized by domain in separate files:
 
-- `installation.rs` - InstallationClient core
-- `repository.rs` - Repository, Branch, GitRef types and operations
-- `issue.rs` - Issue, Comment, Label types and operations
-- `pull_request.rs` - PullRequest, Review types and operations
-- `milestone.rs` - Milestone types and operations
-- `workflow.rs` - Workflow, WorkflowRun types and operations
-- `release.rs` - Release types and operations
+- `installation.rs` - InstallationClient and sub-client factory methods
+- `repository.rs` - RepositoriesClient, Repository, Branch, GitRef types
+- `commit.rs` - commit operation helpers (part of RepositoriesClient)
+- `issue.rs` - IssuesClient, LabelsClient, MilestonesClient, Issue, Comment, Label, Reaction types
+- `pull_request.rs` - PullRequestsClient, PullRequest, Review types
+- `workflow.rs` - WorkflowsClient, Workflow, WorkflowRun types
+- `release.rs` - ReleasesClient, Release types
+- `project.rs` - ProjectsClient, ProjectV2 types
 - `pagination.rs` - PagedResponse generic type
 - `retry.rs` - RetryPolicy and backoff strategies
+
+**Note**: There is no `milestone.rs` file — `MilestonesClient` and all milestone types
+live in `issue.rs` (see constraints.md Sub-Client File Placement table).
 
 ## Naming Conventions
 

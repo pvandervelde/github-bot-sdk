@@ -1,136 +1,281 @@
-# Issue Operations Interface Specification
+# IssuesClient Interface Specification
 
 **Module**: `github-bot-sdk::client::issue`
-**File**: `crates/github-bot-sdk/src/client/issue.rs`
+**Struct**: `IssuesClient`
+**Obtained via**: `InstallationClient::issues()`
+**Source file**: `src/client/issue.rs`
 **Dependencies**: `InstallationClient`, `ApiError`, shared types
+
+See **ADR-003** for the sub-client pattern rationale.
 
 ## Overview
 
-Issue operations provide CRUD operations for GitHub issues, labels, and comments. These are installation-scoped operations requiring appropriate repository permissions.
+`IssuesClient` groups all operations that act on GitHub issues or objects that are
+directly attached to an issue (comments, reactions, labels on an issue, assignees,
+locks, timeline, activity events). It does **not** manage the repository-level label
+catalogue (that is `LabelsClient`) or milestone definitions (that is `MilestonesClient`).
 
-## Architectural Location
+## Sub-Client Type
 
-**Layer**: Infrastructure adapter (GitHub API operations)
-**Purpose**: Issue and label management
-**Required Permissions**: `issues:read` (minimum), `issues:write` (for mutations)
+```rust
+/// Domain client for GitHub issue operations.
+///
+/// Obtained via `InstallationClient::issues()`. Cheap to clone (Arc-backed).
+#[derive(Debug, Clone)]
+pub struct IssuesClient {
+    // Internal representation chosen by interface designer (e.g. Arc<InstallationClient>)
+}
+```
 
 ## Core Types
 
 ### Issue
 
-Represents a GitHub issue.
-
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Issue {
     pub id: u64,
+    pub node_id: String,
     pub number: u64,
     pub title: String,
     pub body: Option<String>,
-    pub state: IssueState,
-    pub user: User,
+    pub state: String,           // "open" | "closed"
+    pub locked: bool,
+    pub user: IssueUser,
+    pub assignees: Vec<IssueUser>,
     pub labels: Vec<Label>,
-    pub assignees: Vec<User>,
+    pub milestone: Option<Milestone>,
     pub comments: u64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub closed_at: Option<DateTime<Utc>>,
     pub html_url: String,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub closed_at: Option<OffsetDateTime>,
-}
-```
-
-### IssueState
-
-Issue state enum.
-
-```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum IssueState {
-    Open,
-    Closed,
-}
-```
-
-### Label
-
-Represents an issue label.
-
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Label {
-    pub id: u64,
-    pub name: String,
-    pub description: Option<String>,
-    pub color: String,
 }
 ```
 
 ### Comment
 
-Represents an issue comment.
-
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Comment {
     pub id: u64,
+    pub node_id: String,
     pub body: String,
-    pub user: User,
+    pub user: IssueUser,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub html_url: String,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
 }
 ```
 
-### User
-
-Represents a GitHub user.
+### IssueUser
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct User {
+pub struct IssueUser {
     pub login: String,
     pub id: u64,
-    pub avatar_url: String,
-    pub html_url: String,
+    pub node_id: String,
+    #[serde(rename = "type")]
+    pub user_type: String,
 }
 ```
 
-## Issue Operations
-
-### Get Issue
+### Label
 
 ```rust
-impl InstallationClient {
-    /// Get a specific issue by number.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Label {
+    pub id: u64,
+    pub node_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub color: String,
+    pub default: bool,
+}
+```
+
+### Milestone
+
+See `MilestonesClient` spec for the full type definition. `Issue` embeds a
+`Milestone` by value as returned by GitHub on issue responses.
+
+### LockReason
+
+```rust
+/// Reason used when locking an issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LockReason {
+    OffTopic,
+    TooHeated,
+    Resolved,
+    Spam,
+}
+```
+
+### IssueActivityEvent
+
+```rust
+/// A discrete activity recorded on an issue (labeling, closing, etc.).
+///
+/// Returned by the issue events REST endpoint — different from webhook events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueActivityEvent {
+    pub id: u64,
+    pub event: String,            // "labeled", "assigned", "closed", etc.
+    pub actor: IssueUser,
+    pub created_at: DateTime<Utc>,
+    pub label: Option<Label>,
+    pub assignee: Option<IssueUser>,
+    pub milestone: Option<MilestoneSummary>,
+    pub rename: Option<IssueRename>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MilestoneSummary {
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueRename {
+    pub from: String,
+    pub to: String,
+}
+```
+
+### TimelineEvent
+
+```rust
+/// A single item in an issue's timeline.
+///
+/// The `event` field drives deserialization. Unknown kinds map to `Unknown`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum TimelineEvent {
+    Commented    { id: u64, actor: IssueUser, body: String,
+                   created_at: DateTime<Utc>, updated_at: DateTime<Utc>,
+                   html_url: String },
+    Labeled      { id: u64, actor: IssueUser, label: Label,
+                   created_at: DateTime<Utc> },
+    Unlabeled    { id: u64, actor: IssueUser, label: Label,
+                   created_at: DateTime<Utc> },
+    Assigned     { id: u64, actor: IssueUser, assignee: IssueUser,
+                   created_at: DateTime<Utc> },
+    Unassigned   { id: u64, actor: IssueUser, assignee: IssueUser,
+                   created_at: DateTime<Utc> },
+    Milestoned   { id: u64, actor: IssueUser, milestone: MilestoneSummary,
+                   created_at: DateTime<Utc> },
+    Demilestoned { id: u64, actor: IssueUser, milestone: MilestoneSummary,
+                   created_at: DateTime<Utc> },
+    Closed       { id: u64, actor: IssueUser, created_at: DateTime<Utc> },
+    Reopened     { id: u64, actor: IssueUser, created_at: DateTime<Utc> },
+    Locked       { id: u64, actor: IssueUser, lock_reason: Option<String>,
+                   created_at: DateTime<Utc> },
+    Unlocked     { id: u64, actor: IssueUser, created_at: DateTime<Utc> },
+    Renamed      { id: u64, actor: IssueUser, rename: IssueRename,
+                   created_at: DateTime<Utc> },
+    Referenced   { id: u64, actor: IssueUser, created_at: DateTime<Utc> },
+    /// Catch-all: unknown event kind. Must not cause a deserialization error.
+    #[serde(other)]
+    Unknown,
+}
+```
+
+**Note**: `#[serde(other)]` on a unit variant is valid for `tag`-enums in serde when
+the fallback variant is a unit variant. Unknown fields are silently discarded. If the
+interface designer determines a different deserialization strategy is needed (e.g. to
+preserve the raw JSON), they may use a custom `Deserialize` impl instead — this spec
+only requires that unknown kinds produce no `Err`.
+
+---
+
+## Request Types
+
+```rust
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateIssueRequest {
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignees: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub milestone: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct UpdateIssueRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,     // "open" | "closed"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignees: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub milestone: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CreateCommentRequest {
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UpdateCommentRequest {
+    pub body: String,
+}
+```
+
+---
+
+## Issue CRUD Operations
+
+### `list`
+
+```rust
+impl IssuesClient {
+    /// List issues in a repository (manual pagination — callers may stop early).
     ///
     /// # Arguments
-    ///
-    /// * `owner` - Repository owner
+    /// * `owner` - Repository owner login
     /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
+    /// * `state` - Filter: `"open"` (default), `"closed"`, or `"all"`
+    /// * `page` - Page number (1-indexed); omit for first page
     ///
     /// # Returns
-    ///
-    /// Returns `Issue` with full metadata, labels, and assignees.
+    /// `PagedResponse<Issue>` — use `.has_next()` and `.next_page_number()` to paginate.
     ///
     /// # Errors
+    /// * `ApiError::NotFound` — repository doesn't exist
+    /// * `ApiError::AuthorizationFailed` — missing `issues: read`
+    pub async fn list(
+        &self,
+        owner: &str,
+        repo: &str,
+        state: Option<&str>,
+        page: Option<u32>,
+    ) -> Result<PagedResponse<Issue>, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/issues?state={state}&page={page}`
+
+### `get`
+
+```rust
+impl IssuesClient {
+    /// Get a single issue by number.
     ///
-    /// * `ApiError::NotFound` - Issue doesn't exist
-    /// * `ApiError::PermissionDenied` - Missing `issues:read` permission
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// let issue = client.get_issue("octocat", "Hello-World", 1).await?;
-    /// println!("Issue: {}", issue.title);
-    /// ```
-    pub async fn get_issue(
+    /// # Errors
+    /// * `ApiError::NotFound` — issue doesn't exist
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
@@ -139,374 +284,60 @@ impl InstallationClient {
 }
 ```
 
-### List Issues
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}`
+
+### `create`
 
 ```rust
-impl InstallationClient {
-    /// List issues in a repository.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `params` - Optional query parameters (state, labels, assignee, etc.)
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of `Issue` objects matching criteria.
-    ///
-    /// # Notes
-    ///
-    /// Returns all matching issues (not paginated).
-    /// Future: Support pagination for repositories with many issues.
-    pub async fn list_issues(
-        &self,
-        owner: &str,
-        repo: &str,
-        params: Option<&ListIssuesParams>,
-    ) -> Result<Vec<Issue>, ApiError>;
-}
-```
-
-### Create Issue
-
-```rust
-impl InstallationClient {
+impl IssuesClient {
     /// Create a new issue.
     ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `request` - Issue creation data
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `Issue`.
-    ///
     /// # Errors
-    ///
-    /// * `ApiError::PermissionDenied` - Missing `issues:write` permission
-    /// * `ApiError::ValidationError` - Invalid title or body
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// let request = CreateIssueRequest {
-    ///     title: "Bug found".to_string(),
-    ///     body: Some("Description".to_string()),
-    ///     labels: vec!["bug".to_string()],
-    ///     assignees: vec!["octocat".to_string()],
-    /// };
-    /// let issue = client.create_issue("octocat", "Hello-World", &request).await?;
-    /// ```
-    pub async fn create_issue(
+    /// * `ApiError::InvalidRequest` — validation failed (empty title, etc.)
+    /// * `ApiError::AuthorizationFailed` — missing `issues: write`
+    pub async fn create(
         &self,
         owner: &str,
         repo: &str,
-        request: &CreateIssueRequest,
+        request: CreateIssueRequest,
     ) -> Result<Issue, ApiError>;
 }
 ```
 
-### Update Issue
+**Endpoint**: `POST /repos/{owner}/{repo}/issues`
+
+### `update`
 
 ```rust
-impl InstallationClient {
-    /// Update an existing issue.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    /// * `request` - Update data (all fields optional)
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `Issue`.
+impl IssuesClient {
+    /// Update an existing issue. All fields are optional (patch semantics).
     ///
     /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Issue doesn't exist
-    /// * `ApiError::PermissionDenied` - Missing `issues:write` permission
-    pub async fn update_issue(
+    /// * `ApiError::NotFound` — issue doesn't exist
+    /// * `ApiError::AuthorizationFailed` — missing `issues: write`
+    pub async fn update(
         &self,
         owner: &str,
         repo: &str,
         issue_number: u64,
-        request: &UpdateIssueRequest,
+        request: UpdateIssueRequest,
     ) -> Result<Issue, ApiError>;
 }
 ```
 
-## Label Operations
+**Endpoint**: `PATCH /repos/{owner}/{repo}/issues/{issue_number}`
 
-### Get Label
+### `set_milestone`
 
 ```rust
-impl InstallationClient {
-    /// Get a repository label by name.
+impl IssuesClient {
+    /// Set (or clear) the milestone on an issue.
+    ///
+    /// Implemented as `update` with only the `milestone` field populated.
     ///
     /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `label_name` - Label name
-    ///
-    /// # Returns
-    ///
-    /// Returns `Label` with metadata.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Label doesn't exist
-    pub async fn get_label(
-        &self,
-        owner: &str,
-        repo: &str,
-        label_name: &str,
-    ) -> Result<Label, ApiError>;
-}
-```
-
-### List Labels
-
-```rust
-impl InstallationClient {
-    /// List all labels in a repository.
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of all repository labels.
-    pub async fn list_labels(
-        &self,
-        owner: &str,
-        repo: &str,
-    ) -> Result<Vec<Label>, ApiError>;
-}
-```
-
-### Create Label
-
-```rust
-impl InstallationClient {
-    /// Create a new label.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `request` - Label data (name, color, description)
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `Label`.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::PermissionDenied` - Missing `issues:write`
-    /// * `ApiError::HttpError` - Label already exists (422)
-    pub async fn create_label(
-        &self,
-        owner: &str,
-        repo: &str,
-        request: &CreateLabelRequest,
-    ) -> Result<Label, ApiError>;
-}
-```
-
-### Add Labels to Issue
-
-```rust
-impl InstallationClient {
-    /// Add labels to an issue.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    /// * `labels` - Label names to add
-    ///
-    /// # Returns
-    ///
-    /// Returns updated list of issue labels.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Issue or label doesn't exist
-    /// * `ApiError::PermissionDenied` - Missing `issues:write`
-    pub async fn add_labels_to_issue(
-        &self,
-        owner: &str,
-        repo: &str,
-        issue_number: u64,
-        labels: &[String],
-    ) -> Result<Vec<Label>, ApiError>;
-}
-```
-
-### Remove Label from Issue
-
-```rust
-impl InstallationClient {
-    /// Remove a label from an issue.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    /// * `label_name` - Label name to remove
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Issue or label doesn't exist
-    /// * `ApiError::PermissionDenied` - Missing `issues:write`
-    pub async fn remove_label_from_issue(
-        &self,
-        owner: &str,
-        repo: &str,
-        issue_number: u64,
-        label_name: &str,
-    ) -> Result<(), ApiError>;
-}
-```
-
-## Comment Operations
-
-### List Comments
-
-```rust
-impl InstallationClient {
-    /// List all comments on an issue.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of comments in chronological order.
-    pub async fn list_issue_comments(
-        &self,
-        owner: &str,
-        repo: &str,
-        issue_number: u64,
-    ) -> Result<Vec<Comment>, ApiError>;
-}
-```
-
-### Create Comment
-
-```rust
-impl InstallationClient {
-    /// Add a comment to an issue.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    /// * `body` - Comment body (Markdown supported)
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `Comment`.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Issue doesn't exist
-    /// * `ApiError::PermissionDenied` - Missing `issues:write`
-    /// * `ApiError::ValidationError` - Empty body
-    pub async fn create_issue_comment(
-        &self,
-        owner: &str,
-        repo: &str,
-        issue_number: u64,
-        body: &str,
-    ) -> Result<Comment, ApiError>;
-}
-```
-
-### Update Comment
-
-```rust
-impl InstallationClient {
-    /// Update an issue comment.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `comment_id` - Comment ID (not issue number)
-    /// * `body` - New comment body
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `Comment`.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Comment doesn't exist
-    /// * `ApiError::PermissionDenied` - Not comment author or missing permission
-    pub async fn update_issue_comment(
-        &self,
-        owner: &str,
-        repo: &str,
-        comment_id: u64,
-        body: &str,
-    ) -> Result<Comment, ApiError>;
-}
-```
-
-### Delete Comment
-
-```rust
-impl InstallationClient {
-    /// Delete an issue comment.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `comment_id` - Comment ID
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Comment doesn't exist
-    /// * `ApiError::PermissionDenied` - Not comment author or admin
-    pub async fn delete_issue_comment(
-        &self,
-        owner: &str,
-        repo: &str,
-        comment_id: u64,
-    ) -> Result<(), ApiError>;
-}
-```
-
-## Milestone Operations
-
-### Set Issue Milestone
-
-```rust
-impl InstallationClient {
-    /// Set the milestone for an issue.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    /// * `milestone_number` - Milestone number (or None to remove)
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `Issue`.
-    pub async fn set_issue_milestone(
+    /// * `milestone_number` — milestone number, or `None` to remove the milestone.
+    pub async fn set_milestone(
         &self,
         owner: &str,
         repo: &str,
@@ -516,158 +347,525 @@ impl InstallationClient {
 }
 ```
 
-**Implementation**: Uses `update_issue` with milestone field.
+---
 
-## Request Types
+## Comment Operations
 
-### CreateIssueRequest
+All comments are returned in ascending `created_at` order (oldest first — GitHub default).
+
+### `list_comments` ⚡ *auto-paginated*
 
 ```rust
-#[derive(Debug, Clone, Serialize)]
-pub struct CreateIssueRequest {
-    pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub body: Option<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub labels: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub assignees: Vec<String>,
+impl IssuesClient {
+    /// List all comments on an issue.
+    ///
+    /// Auto-paginates using `per_page=100` and follows all `Link: rel="next"`
+    /// headers (ADR-002). Returns the complete list; callers do not need to
+    /// handle pagination themselves.
+    ///
+    /// # Errors
+    /// * `ApiError::NotFound` — issue doesn't exist (returns immediately, no partial list)
+    pub async fn list_comments(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+    ) -> Result<Vec<Comment>, ApiError>;
 }
 ```
 
-### UpdateIssueRequest
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/comments?per_page=100`
+
+### `get_comment`
 
 ```rust
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct UpdateIssueRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub body: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub state: Option<IssueState>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub labels: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub assignees: Option<Vec<String>>,
+impl IssuesClient {
+    /// Get a single comment by its ID.
+    ///
+    /// Note: comment IDs are repository-scoped, not issue-scoped.
+    pub async fn get_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> Result<Comment, ApiError>;
 }
 ```
 
-### ListIssuesParams
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/comments/{comment_id}`
+
+### `create_comment`
 
 ```rust
-#[derive(Debug, Clone, Default)]
-pub struct ListIssuesParams {
-    pub state: Option<IssueState>,
-    pub labels: Vec<String>,
-    pub assignee: Option<String>,
+impl IssuesClient {
+    /// Add a new comment to an issue.
+    ///
+    /// # Errors
+    /// * `ApiError::NotFound` — issue doesn't exist
+    /// * `ApiError::InvalidRequest` — empty body
+    /// * `ApiError::AuthorizationFailed` — missing `issues: write` or issue is locked
+    pub async fn create_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        request: CreateCommentRequest,
+    ) -> Result<Comment, ApiError>;
 }
 ```
 
-### CreateLabelRequest
+**Endpoint**: `POST /repos/{owner}/{repo}/issues/{issue_number}/comments`
+
+### `update_comment`
 
 ```rust
-#[derive(Debug, Clone, Serialize)]
-pub struct CreateLabelRequest {
-    pub name: String,
-    pub color: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+impl IssuesClient {
+    /// Update the body of an existing comment.
+    ///
+    /// # Errors
+    /// * `ApiError::NotFound` — comment doesn't exist
+    /// * `ApiError::AuthorizationFailed` — not the comment author or missing permission
+    pub async fn update_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        request: UpdateCommentRequest,
+    ) -> Result<Comment, ApiError>;
 }
 ```
 
-## Error Handling
+**Endpoint**: `PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}`
 
-### Permission Errors
-
-Operations requiring `issues:write`:
-
-- `create_issue`
-- `update_issue`
-- `create_label`
-- `add_labels_to_issue`
-- `remove_label_from_issue`
-- `create_issue_comment`
-- `update_issue_comment`
-- `delete_issue_comment`
-
-### Validation Errors
-
-Return `ApiError::ValidationError` when:
-
-- Issue title is empty
-- Comment body is empty
-- Label color is invalid format
-
-## Usage Examples
-
-### Create and Label an Issue
+### `delete_comment`
 
 ```rust
-let request = CreateIssueRequest {
-    title: "Bug: Application crashes on startup".to_string(),
-    body: Some("Steps to reproduce...".to_string()),
-    labels: vec!["bug".to_string(), "high-priority".to_string()],
-    assignees: vec!["maintainer".to_string()],
-};
-
-let issue = client.create_issue("owner", "repo", &request).await?;
-println!("Created issue #{}", issue.number);
+impl IssuesClient {
+    /// Delete a comment.
+    ///
+    /// # Errors
+    /// * `ApiError::NotFound` — comment doesn't exist
+    /// * `ApiError::AuthorizationFailed` — not the comment author or missing permission
+    pub async fn delete_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> Result<(), ApiError>;
+}
 ```
 
-### Add Comment to Issue
+**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}`
+**Success**: 204 No Content
+
+---
+
+## Label Application Operations
+
+These act on labels **attached to a specific issue**. For repository-level label catalogue
+management (creating/updating label definitions), use `LabelsClient`.
+
+### `list_labels`
 
 ```rust
-let comment = client.create_issue_comment(
-    "owner",
-    "repo",
-    42,
-    "Thanks for reporting! We're investigating.",
-).await?;
+impl IssuesClient {
+    /// List labels currently applied to an issue.
+    ///
+    /// Auto-paginates using `per_page=100` (ADR-002). The label set per issue
+    /// is bounded; returning all at once is appropriate.
+    pub async fn list_labels(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+    ) -> Result<Vec<Label>, ApiError>;
+}
 ```
 
-### Close an Issue
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/labels?per_page=100`
+
+### `add_labels`
 
 ```rust
-let update = UpdateIssueRequest {
-    state: Some(IssueState::Closed),
-    ..Default::default()
-};
-
-client.update_issue("owner", "repo", 42, &update).await?;
+impl IssuesClient {
+    /// Add one or more labels to an issue.
+    ///
+    /// Labels already on the issue are ignored by GitHub (idempotent).
+    ///
+    /// # Returns
+    /// The updated label list on the issue.
+    pub async fn add_labels(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        labels: Vec<String>,
+    ) -> Result<Vec<Label>, ApiError>;
+}
 ```
 
-## Implementation Notes
+**Endpoint**: `POST /repos/{owner}/{repo}/issues/{issue_number}/labels`
+**Body**: `{ "labels": ["bug", "help-wanted"] }`
 
-### API Paths
+### `remove_label`
 
-- Issues: `/repos/{owner}/{repo}/issues`
-- Issue: `/repos/{owner}/{repo}/issues/{issue_number}`
-- Labels: `/repos/{owner}/{repo}/labels`
-- Issue labels: `/repos/{owner}/{repo}/issues/{issue_number}/labels`
-- Comments: `/repos/{owner}/{repo}/issues/{issue_number}/comments`
-- Comment: `/repos/{owner}/{repo}/issues/comments/{comment_id}`
+```rust
+impl IssuesClient {
+    /// Remove a single label from an issue.
+    ///
+    /// # Returns
+    /// The remaining label list.
+    ///
+    /// # Errors
+    /// * `ApiError::NotFound` — issue or label doesn't exist on the issue
+    pub async fn remove_label(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        label_name: &str,
+    ) -> Result<Vec<Label>, ApiError>;
+}
+```
 
-### Pull Requests
+**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{label_name}`
 
-GitHub's API returns pull requests in issue listings. To filter issues only, check that the `pull_request` field is absent.
+### `replace_labels` (atomic)
 
-### Testing Strategy
+```rust
+impl IssuesClient {
+    /// Replace all labels on an issue atomically.
+    ///
+    /// Any labels not in `labels` are removed. Labels in `labels` that do not exist
+    /// in the repository are created automatically by GitHub.
+    /// Pass an empty slice to remove all labels.
+    ///
+    /// # Returns
+    /// The new label list as applied by GitHub.
+    pub async fn replace_labels(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        labels: Vec<String>,
+    ) -> Result<Vec<Label>, ApiError>;
+}
+```
 
-- Mock all HTTP responses
-- Test permission error mapping
-- Test validation errors
-- Verify correct JSON serialization
+**Endpoint**: `PUT /repos/{owner}/{repo}/issues/{issue_number}/labels`
+**Body**: `{ "labels": ["enhancement"] }`
 
-## Assertions
+---
 
-Supports:
+## Reaction Operations
 
-- **Assertion #3a**: Uses installation tokens
-- **Assertion #7**: Issue management operations
+### `list_reactions` ⚡ *auto-paginated*
 
-## References
+```rust
+impl IssuesClient {
+    /// List all reactions on an issue.
+    pub async fn list_reactions(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+    ) -> Result<Vec<Reaction>, ApiError>;
+}
+```
 
-- GitHub API: [Issues](https://docs.github.com/en/rest/issues/issues)
-- GitHub API: [Labels](https://docs.github.com/en/rest/issues/labels)
-- GitHub API: [Comments](https://docs.github.com/en/rest/issues/comments)
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/reactions?per_page=100`
+
+### `create_reaction`
+
+```rust
+impl IssuesClient {
+    /// Add a reaction to an issue.
+    ///
+    /// If this user has already reacted with this emoji, GitHub returns the
+    /// existing reaction (HTTP 200). Both 200 and 201 are mapped to `Ok(Reaction)`.
+    pub async fn create_reaction(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        content: ReactionContent,
+    ) -> Result<Reaction, ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/issues/{issue_number}/reactions`
+
+### `delete_reaction`
+
+```rust
+impl IssuesClient {
+    /// Remove a reaction from an issue.
+    pub async fn delete_reaction(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        reaction_id: u64,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/{issue_number}/reactions/{reaction_id}`
+
+### `list_comment_reactions` ⚡ *auto-paginated*
+
+```rust
+impl IssuesClient {
+    /// List all reactions on an issue comment.
+    pub async fn list_comment_reactions(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> Result<Vec<Reaction>, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions?per_page=100`
+
+### `create_comment_reaction`
+
+```rust
+impl IssuesClient {
+    /// Add a reaction to an issue comment.
+    pub async fn create_comment_reaction(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        content: ReactionContent,
+    ) -> Result<Reaction, ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions`
+
+### `delete_comment_reaction`
+
+```rust
+impl IssuesClient {
+    /// Remove a reaction from an issue comment.
+    pub async fn delete_comment_reaction(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        reaction_id: u64,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions/{reaction_id}`
+
+---
+
+## Assignee Operations
+
+### `list_available_assignees` ⚡ *auto-paginated*
+
+```rust
+impl IssuesClient {
+    /// List users who can be assigned to issues in a repository.
+    ///
+    /// Auto-paginates (ADR-002).
+    pub async fn list_available_assignees(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Vec<IssueUser>, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/assignees?per_page=100`
+
+### `add_assignees`
+
+```rust
+impl IssuesClient {
+    /// Add assignees to an issue.
+    ///
+    /// GitHub silently ignores users who are not eligible to be assigned.
+    ///
+    /// # Returns
+    /// Updated `Issue` with the new assignee list.
+    pub async fn add_assignees(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        assignees: Vec<String>,
+    ) -> Result<Issue, ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/issues/{issue_number}/assignees`
+**Body**: `{ "assignees": ["alice", "bob"] }`
+
+### `remove_assignees`
+
+```rust
+impl IssuesClient {
+    /// Remove assignees from an issue.
+    ///
+    /// GitHub silently ignores users not currently assigned.
+    ///
+    /// # Returns
+    /// Updated `Issue` with the revised assignee list.
+    pub async fn remove_assignees(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        assignees: Vec<String>,
+    ) -> Result<Issue, ApiError>;
+}
+```
+
+**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/{issue_number}/assignees`
+**Body**: `{ "assignees": ["alice"] }` — GitHub requires a body on this DELETE.
+
+---
+
+## Lock Operations
+
+### `lock`
+
+```rust
+impl IssuesClient {
+    /// Lock an issue, preventing non-collaborator comments.
+    ///
+    /// # Arguments
+    /// * `reason` — optional display reason shown to users attempting to comment
+    ///
+    /// # Errors
+    /// * `ApiError::AuthorizationFailed` — requires admin or maintain permission
+    pub async fn lock(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+        reason: Option<LockReason>,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `PUT /repos/{owner}/{repo}/issues/{issue_number}/lock`
+**Body**: `{ "lock_reason": "too-heated" }` (field omitted when `reason` is `None`)
+**Success**: 204 No Content
+
+### `unlock`
+
+```rust
+impl IssuesClient {
+    /// Unlock a previously locked issue.
+    ///
+    /// # Errors
+    /// * `ApiError::AuthorizationFailed` — requires admin or maintain permission
+    pub async fn unlock(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/{issue_number}/lock`
+**Success**: 204 No Content
+
+---
+
+## Activity & Timeline Operations
+
+### `list_activity_events` ⚡ *auto-paginated*
+
+```rust
+impl IssuesClient {
+    /// List all discrete activity events recorded on an issue.
+    ///
+    /// Returns events in ascending chronological order (oldest first).
+    /// Auto-paginates (ADR-002).
+    ///
+    /// # Examples of event kinds
+    /// `labeled`, `unlabeled`, `assigned`, `unassigned`, `milestoned`,
+    /// `demilestoned`, `closed`, `reopened`, `renamed`, `locked`, `unlocked`.
+    pub async fn list_activity_events(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+    ) -> Result<Vec<IssueActivityEvent>, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/events?per_page=100`
+
+### `list_timeline` ⚡ *auto-paginated*
+
+```rust
+impl IssuesClient {
+    /// List the complete timeline of events for an issue.
+    ///
+    /// Superset of `list_activity_events`: also includes comments,
+    /// cross-references, and review events. Returns a heterogeneous
+    /// sequence; unknown event kinds deserialize to `TimelineEvent::Unknown`
+    /// without error. Auto-paginates (ADR-002).
+    pub async fn list_timeline(
+        &self,
+        owner: &str,
+        repo: &str,
+        issue_number: u64,
+    ) -> Result<Vec<TimelineEvent>, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/timeline?per_page=100`
+
+---
+
+## Permissions Summary
+
+| Method | Minimum permission |
+|--------|--------------------|
+| `list`, `get` | `issues: read` |
+| `list_comments`, `get_comment` | `issues: read` |
+| `list_labels`, `list_reactions`, `list_comment_reactions` | `issues: read` |
+| `list_available_assignees` | `issues: read` |
+| `list_activity_events`, `list_timeline` | `issues: read` |
+| `create`, `update`, `set_milestone` | `issues: write` |
+| `create_comment`, `update_comment`, `delete_comment` | `issues: write` |
+| `add_labels`, `remove_label`, `replace_labels` | `issues: write` |
+| `create_reaction`, `delete_reaction` | `issues: write` |
+| `create_comment_reaction`, `delete_comment_reaction` | `issues: write` |
+| `add_assignees`, `remove_assignees` | `issues: write` |
+| `lock`, `unlock` | admin or maintain |
+
+## Error Mapping (standard across all methods)
+
+| HTTP status | `ApiError` variant |
+|-------------|-------------------|
+| 401 | `AuthenticationFailed` |
+| 403 | `AuthorizationFailed` |
+| 404 | `NotFound` |
+| 422 | `InvalidRequest { message }` |
+| other 4xx/5xx | `HttpError { status, message }` |
+| deserialization | `HttpError` (wraps serde error) |
+
+## Testing Requirements
+
+Tests live in `src/client/issue_tests.rs` using `wiremock`. Submodules:
+
+- `construction` — struct construction, serialization of request types
+- `issue_operations` — list/get/create/update with mock HTTP responses
+- `comment_operations` — full CRUD + auto-pagination (empty, 1-page, 2-page, 404)
+- `label_operations` — add, remove, replace, list on issue
+- `reaction_operations` — all six reaction methods; duplicate-reaction (200 vs 201)
+- `assignee_operations` — add, remove, list-available
+- `lock_operations` — lock with/without reason, unlock
+- `activity_event_operations` — auto-pagination, empty list
+- `timeline_operations` — mixed event types, unknown kind → `Unknown`, empty list

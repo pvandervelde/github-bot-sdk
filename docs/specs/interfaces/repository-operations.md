@@ -1,18 +1,36 @@
-# Repository Operations Interface Specification
+# RepositoriesClient Interface Specification
 
 **Module**: `github-bot-sdk::client::repository`
-**File**: `crates/github-bot-sdk/src/client/repository.rs`
-**Dependencies**: `InstallationClient`, `ApiError`, shared types
+**Struct**: `RepositoriesClient`
+**Obtained via**: `InstallationClient::repositories()`
+**Source files**: `src/client/repository.rs`, `src/client/commit.rs`
+
+See **ADR-003** for the sub-client pattern rationale.
 
 ## Overview
 
-Repository operations provide access to repository metadata, branch management, and Git reference operations. These are installation-scoped operations that require appropriate permissions.
+`RepositoriesClient` provides access to repository metadata, branch management,
+Git reference operations, tags, and commit history. Commit operations are logically
+part of repository operations and live in the same sub-client.
 
-## Architectural Location
+## Sub-Client Type
 
-**Layer**: Infrastructure adapter (GitHub API operations)
-**Purpose**: Repository and Git reference management
-**Required Permissions**: `contents:read` (minimum), `contents:write` (for mutations)
+```rust
+/// Domain client for repository, git-ref, and commit operations.
+///
+/// Obtained via `InstallationClient::repositories()`. Cheap to clone (Arc-backed).
+#[derive(Debug, Clone)]
+pub struct RepositoriesClient {
+    // Internal representation chosen by interface designer
+}
+```
+
+## Permissions
+
+| Operation group | Minimum permission |
+|----------------|--------------------|
+| `get`, list branches/tags/commits, `compare` | `contents: read` |
+| `create_ref`, `update_ref`, `delete_ref`, `create_branch`, `create_tag` | `contents: write` |
 
 ## Core Types
 
@@ -134,34 +152,24 @@ pub struct Tag {
 
 ## Repository Operations
 
-### Get Repository
+### `get`
 
 ```rust
-impl InstallationClient {
+impl RepositoriesClient {
     /// Get repository metadata.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner login
-    /// * `repo` - Repository name
-    ///
-    /// # Returns
-    ///
-    /// Returns `Repository` with full metadata.
     ///
     /// # Errors
     ///
-    /// * `ApiError::NotFound` - Repository doesn't exist or not accessible
-    /// * `ApiError::PermissionDenied` - Missing `contents:read` permission
-    /// * `ApiError::HttpError` - Other API errors
+    /// * `ApiError::NotFound` — Repository doesn't exist or is not accessible
+    /// * `ApiError::AuthorizationFailed` — Missing `contents: read`
     ///
     /// # Examples
     ///
     /// ```rust
-    /// let repo = client.get_repository("octocat", "Hello-World").await?;
+    /// let repo = client.repositories().get("octocat", "Hello-World").await?;
     /// println!("Repository: {}", repo.full_name);
     /// ```
-    pub async fn get_repository(
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
@@ -169,39 +177,21 @@ impl InstallationClient {
 }
 ```
 
-**Implementation**:
-
-1. Build path: `repos/{owner}/{repo}`
-2. Call `self.get(path)`
-3. Parse JSON response to `Repository`
-4. Map errors appropriately
+**Endpoint**: `GET /repos/{owner}/{repo}`
 
 ## Branch Operations
 
-### List Branches
+### `list_branches`
 
 ```rust
-impl InstallationClient {
+impl RepositoriesClient {
     /// List all branches in a repository.
     ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of `Branch` objects.
+    /// Auto-paginates using `per_page=100` (ADR-002).
     ///
     /// # Errors
     ///
-    /// * `ApiError::NotFound` - Repository not found
-    /// * `ApiError::PermissionDenied` - Missing permissions
-    ///
-    /// # Notes
-    ///
-    /// This method returns all branches (not paginated for now).
-    /// Future: Support pagination for repositories with many branches.
+    /// * `ApiError::NotFound` — Repository not found
     pub async fn list_branches(
         &self,
         owner: &str,
@@ -210,25 +200,17 @@ impl InstallationClient {
 }
 ```
 
-### Get Branch
+**Endpoint**: `GET /repos/{owner}/{repo}/branches?per_page=100`
+
+### `get_branch`
 
 ```rust
-impl InstallationClient {
+impl RepositoriesClient {
     /// Get a specific branch by name.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `branch` - Branch name
-    ///
-    /// # Returns
-    ///
-    /// Returns `Branch` with commit SHA and protection status.
     ///
     /// # Errors
     ///
-    /// * `ApiError::NotFound` - Branch doesn't exist
+    /// * `ApiError::NotFound` — Branch doesn't exist
     pub async fn get_branch(
         &self,
         owner: &str,
@@ -238,23 +220,17 @@ impl InstallationClient {
 }
 ```
 
+**Endpoint**: `GET /repos/{owner}/{repo}/branches/{branch}`
+
 ## Git Reference Operations
 
-### Get Git Reference
+### `get_ref`
 
 ```rust
-impl InstallationClient {
-    /// Get a Git reference (branch or tag).
+impl RepositoriesClient {
+    /// Get a Git reference (branch head or tag).
     ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `ref_name` - Reference name (e.g., "heads/main", "tags/v1.0.0")
-    ///
-    /// # Returns
-    ///
-    /// Returns `GitRef` with SHA and metadata.
+    /// `ref_name` examples: `"heads/main"`, `"tags/v1.0.0"`
     ///
     /// # Errors
     ///
@@ -263,14 +239,10 @@ impl InstallationClient {
     /// # Examples
     ///
     /// ```rust
-    /// // Get main branch reference
-    /// let git_ref = client.get_git_ref("octocat", "Hello-World", "heads/main").await?;
-    /// println!("SHA: {}", git_ref.object.sha);
-    ///
-    /// // Get tag reference
-    /// let tag_ref = client.get_git_ref("octocat", "Hello-World", "tags/v1.0.0").await?;
+    /// let r = client.repositories().get_ref("octocat", "Hello-World", "heads/main").await?;
+    /// println!("SHA: {}", r.object.sha);
     /// ```
-    pub async fn get_git_ref(
+    pub async fn get_ref(
         &self,
         owner: &str,
         repo: &str,
@@ -279,40 +251,30 @@ impl InstallationClient {
 }
 ```
 
-### Create Git Reference
+**Endpoint**: `GET /repos/{owner}/{repo}/git/refs/{ref_name}`
+
+### `create_ref`
 
 ```rust
-impl InstallationClient {
+impl RepositoriesClient {
     /// Create a new Git reference (branch or tag).
     ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `ref_name` - Full reference name (e.g., "refs/heads/feature-branch")
-    /// * `sha` - Commit SHA to point reference at
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `GitRef`.
+    /// `ref_name` must be fully qualified, e.g. `"refs/heads/feature-branch"`.
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing `contents:write` permission
-    /// * `ApiError::HttpError` - Reference already exists (422)
+    /// * `ApiError::AuthorizationFailed` - Missing `contents: write`
+    /// * `ApiError::InvalidRequest` - Reference already exists (422)
     /// * `ApiError::NotFound` - SHA doesn't exist
     ///
     /// # Examples
     ///
     /// ```rust
-    /// let git_ref = client.create_git_ref(
-    ///     "octocat",
-    ///     "Hello-World",
-    ///     "refs/heads/new-feature",
-    ///     "abc123def456",
-    /// ).await?;
+    /// let r = client.repositories()
+    ///     .create_ref("octocat", "Hello-World", "refs/heads/new-feature", "abc123")
+    ///     .await?;
     /// ```
-    pub async fn create_git_ref(
+    pub async fn create_ref(
         &self,
         owner: &str,
         repo: &str,
@@ -322,29 +284,19 @@ impl InstallationClient {
 }
 ```
 
-### Update Git Reference
+**Endpoint**: `POST /repos/{owner}/{repo}/git/refs`
+
+### `update_ref`
 
 ```rust
-impl InstallationClient {
+impl RepositoriesClient {
     /// Update an existing Git reference.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `ref_name` - Reference name (e.g., "heads/main")
-    /// * `sha` - New commit SHA
-    /// * `force` - Whether to force update (allows non-fast-forward)
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `GitRef`.
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing `contents:write`
-    /// * `ApiError::HttpError` - Non-fast-forward without force (422)
-    pub async fn update_git_ref(
+    /// * `ApiError::AuthorizationFailed` - Missing `contents: write`
+    /// * `ApiError::InvalidRequest` - Non-fast-forward without `force` (422)
+    pub async fn update_ref(
         &self,
         owner: &str,
         repo: &str,
@@ -355,23 +307,19 @@ impl InstallationClient {
 }
 ```
 
-### Delete Git Reference
+**Endpoint**: `PATCH /repos/{owner}/{repo}/git/refs/{ref_name}`
+
+### `delete_ref`
 
 ```rust
-impl InstallationClient {
+impl RepositoriesClient {
     /// Delete a Git reference.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `ref_name` - Reference name (e.g., "heads/feature-branch")
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing `contents:write`
+    /// * `ApiError::AuthorizationFailed` - Missing `contents: write`
     /// * `ApiError::NotFound` - Reference doesn't exist
-    pub async fn delete_git_ref(
+    pub async fn delete_ref(
         &self,
         owner: &str,
         repo: &str,
@@ -380,27 +328,18 @@ impl InstallationClient {
 }
 ```
 
+**Endpoint**: `DELETE /repos/{owner}/{repo}/git/refs/{ref_name}`
+**Success**: 204 No Content
+
 ## Tag Operations
 
-### List Tags
+### `list_tags`
 
 ```rust
-impl InstallationClient {
+impl RepositoriesClient {
     /// List all tags in a repository.
     ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of `Tag` objects.
-    ///
-    /// # Notes
-    ///
-    /// Returns all tags (not paginated).
-    /// Future: Support pagination for repos with many tags.
+    /// Auto-paginates using `per_page=100` (ADR-002).
     pub async fn list_tags(
         &self,
         owner: &str,
@@ -409,41 +348,33 @@ impl InstallationClient {
 }
 ```
 
-## Convenience Methods for Branch and Tag Creation
+**Endpoint**: `GET /repos/{owner}/{repo}/tags?per_page=100`
 
-These methods provide a more intuitive API for common operations, wrapping the lower-level `create_git_ref` method.
+## Convenience Methods
 
-### Create Branch
+### `create_branch`
+
+Convenience wrapper around `create_ref` for branch creation.
 
 ```rust
-impl InstallationClient {
-    /// Create a new branch.
+impl RepositoriesClient {
+    /// Create a new branch from a commit SHA.
     ///
-    /// Convenience wrapper around `create_git_ref` for branch creation.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `branch_name` - Name of the new branch (without "refs/heads/" prefix)
-    /// * `from_sha` - Commit SHA to create the branch from
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `GitRef`.
+    /// `branch_name` is the short name (without `refs/heads/` prefix).
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing `contents:write` permission
-    /// * `ApiError::HttpError` - Branch already exists (422)
+    /// * `ApiError::AuthorizationFailed` - Missing `contents: write`
+    /// * `ApiError::InvalidRequest` - Branch already exists (422)
     /// * `ApiError::NotFound` - SHA doesn't exist
     ///
     /// # Examples
     ///
     /// ```rust
-    /// // Create new branch from main
-    /// let main = client.get_branch("owner", "repo", "main").await?;
-    /// let branch = client.create_branch("owner", "repo", "feature", &main.commit.sha).await?;
+    /// let main = client.repositories().get_branch("owner", "repo", "main").await?;
+    /// let branch = client.repositories()
+    ///     .create_branch("owner", "repo", "feature", &main.commit.sha)
+    ///     .await?;
     /// ```
     pub async fn create_branch(
         &self,
@@ -455,45 +386,23 @@ impl InstallationClient {
 }
 ```
 
-**Implementation**: Calls `self.create_git_ref(owner, repo, &format!("refs/heads/{}", branch_name), from_sha)`
+**Implementation**: Calls `self.create_ref(owner, repo, &format!("refs/heads/{branch_name}"), from_sha)`
 
-### Create Tag
+### `create_tag`
+
+Convenience wrapper around `create_ref` for lightweight tag creation.
 
 ```rust
-impl InstallationClient {
-    /// Create a new lightweight tag.
+impl RepositoriesClient {
+    /// Create a new lightweight tag pointing at a commit SHA.
     ///
-    /// Convenience wrapper around `create_git_ref` for tag creation.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `tag_name` - Name of the new tag (without "refs/tags/" prefix)
-    /// * `from_sha` - Commit SHA to tag
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `GitRef`.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::PermissionDenied` - Missing `contents:write` permission
-    /// * `ApiError::HttpError` - Tag already exists (422)
-    /// * `ApiError::NotFound` - SHA doesn't exist
+    /// For annotated tags, use the Git Data API (not currently implemented).
     ///
     /// # Examples
     ///
     /// ```rust
-    /// // Create release tag
-    /// let commit_sha = "abc123def456";
-    /// let tag = client.create_tag("owner", "repo", "v1.0.0", commit_sha).await?;
+    /// client.repositories().create_tag("owner", "repo", "v1.0.0", sha).await?;
     /// ```
-    ///
-    /// # Notes
-    ///
-    /// This creates a lightweight tag. For annotated tags with messages,
-    /// use the Git Data API (not currently implemented).
     pub async fn create_tag(
         &self,
         owner: &str,
@@ -504,58 +413,70 @@ impl InstallationClient {
 }
 ```
 
-**Implementation**: Calls `self.create_git_ref(owner, repo, &format!("refs/tags/{}", tag_name), from_sha)`
+**Implementation**: Calls `self.create_ref(owner, repo, &format!("refs/tags/{tag_name}"), from_sha)`
 
-## Request Body Types
+## Commit Operations
 
-### CreateGitRefRequest
+### `get_commit`
 
 ```rust
-#[derive(Debug, Serialize)]
-struct CreateGitRefRequest {
-    #[serde(rename = "ref")]
-    ref_name: String,
-    sha: String,
+impl RepositoriesClient {
+    /// Get full commit details by SHA.
+    pub async fn get_commit(
+        &self,
+        owner: &str,
+        repo: &str,
+        sha: &str,
+    ) -> Result<FullCommit, ApiError>;
 }
 ```
 
-### UpdateGitRefRequest
+**Endpoint**: `GET /repos/{owner}/{repo}/commits/{sha}`
+
+### `list_commits`
 
 ```rust
-#[derive(Debug, Serialize)]
-struct UpdateGitRefRequest {
-    sha: String,
-    force: bool,
+impl RepositoriesClient {
+    /// List commits on a branch, optionally scoped to a file path.
+    ///
+    /// Returns a single page of results (manual pagination — commit history
+    /// can be arbitrarily large, ADR-002).
+    pub async fn list_commits(
+        &self,
+        owner: &str,
+        repo: &str,
+        branch: &str,
+        path: Option<&str>,
+        page: u32,
+    ) -> Result<PagedResponse<CommitDetails>, ApiError>;
 }
 ```
 
-## Error Handling
+**Endpoint**: `GET /repos/{owner}/{repo}/commits?sha={branch}&path={path}&page={page}&per_page=30`
 
-### Permission Errors
+### `compare`
 
-Operations requiring `contents:write`:
+```rust
+impl RepositoriesClient {
+    /// Compare two commits or refs to get the diff and divergence info.
+    pub async fn compare(
+        &self,
+        owner: &str,
+        repo: &str,
+        base: &str,
+        head: &str,
+    ) -> Result<Comparison, ApiError>;
+}
+```
 
-- `create_git_ref`
-- `update_git_ref`
-- `delete_git_ref`
-
-All return `ApiError::PermissionDenied` with 403 status.
-
-### Not Found Errors
-
-Return `ApiError::NotFound` (404) when:
-
-- Repository doesn't exist
-- Branch doesn't exist
-- Reference doesn't exist
-- Installation doesn't have access
+**Endpoint**: `GET /repos/{owner}/{repo}/compare/{base}...{head}`
 
 ## Usage Examples
 
 ### Get Repository Metadata
 
 ```rust
-let repo = client.get_repository("octocat", "Hello-World").await?;
+let repo = client.repositories().get("octocat", "Hello-World").await?;
 println!("Default branch: {}", repo.default_branch);
 println!("Created: {}", repo.created_at);
 ```
@@ -563,23 +484,15 @@ println!("Created: {}", repo.created_at);
 ### Create a New Branch
 
 ```rust
-// Get current main branch SHA
-let main_branch = client.get_branch("octocat", "Hello-World", "main").await?;
-let sha = main_branch.commit.sha;
-
-// Create new branch pointing at same SHA
-let new_ref = client.create_git_ref(
-    "octocat",
-    "Hello-World",
-    "refs/heads/feature-branch",
-    &sha,
-).await?;
+let repos = client.repositories();
+let main = repos.get_branch("octocat", "Hello-World", "main").await?;
+let _branch = repos.create_branch("octocat", "Hello-World", "feature", &main.commit.sha).await?;
 ```
 
 ### List All Tags
 
 ```rust
-let tags = client.list_tags("octocat", "Hello-World").await?;
+let tags = client.repositories().list_tags("octocat", "Hello-World").await?;
 for tag in tags {
     println!("Tag: {} -> {}", tag.name, tag.commit.sha);
 }

@@ -143,6 +143,44 @@ This document defines the responsibilities of components within the GitHub Bot S
 
 **Responsibilities:**
 
+- **Knows**: Issue metadata, labels, assignees, comments, milestones, reactions, lock state
+- **Does**: Creates/updates issues, manages comments (with auto-pagination), handles assignees,
+  labels, reactions, locking, milestones, and timeline/activity-event retrieval
+
+**Collaborators:**
+
+- `GitHubApiClient` (executes issue API calls)
+- `PaginationHelper` (drives auto-pagination loop for comment/event/reaction lists)
+
+**Roles:**
+
+- **Issue Lifecycle Manager**: Handles the complete issue workflow (open → close)
+- **Comment Manager**: Creates, updates, deletes, and paginated-lists issue comments
+- **Moderation Controller**: Locks and unlocks issues via the admin lock API
+- **Assignment Coordinator**: Adds, removes, and queries assignees per-issue
+- **Label Coordinator**: Adds, removes, replaces, and queries labels on issues
+- **Reaction Handler**: Creates, lists, and deletes emoji reactions on issues and comments
+- **Milestone CRUD**: Creates, updates, deletes, and lists milestones in a repository
+- **Timeline Reader**: Retrieves complete issue activity events and full timeline for audit trails
+
+### ReactionOperations
+
+**Responsibilities:**
+
+- **Knows**: Emoji reaction content types, reaction IDs, per-user reaction state
+- **Does**: Creates (idempotently), lists (auto-paginated), and deletes reactions on
+  issues and issue comments
+
+**Collaborators:**
+
+- `GitHubApiClient` (executes reaction API calls)
+- `PaginationHelper` (drives auto-pagination)
+
+**Roles:**
+
+- **Signal Emitter**: Provides lightweight emoji acknowledgements without comment noise
+- **Idempotency Handler**: Treats HTTP 200 (duplicate) and HTTP 201 (new) as identical success
+
 - **Knows**: Issue metadata, labels, assignees, comments
 - **Does**: Creates/updates issues, manages labels, handles assignments
 

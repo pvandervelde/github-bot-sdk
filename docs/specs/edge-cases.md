@@ -568,3 +568,154 @@ Each edge case should have:
 - **P1 (High)**: Rate limiting, token refresh, webhook validation
 - **P2 (Medium)**: Pagination, concurrency, configuration
 - **P3 (Low)**: Rare edge cases, future compatibility
+
+---
+
+## Issue Extended Operations Edge Cases
+
+### Edge Case 17: Auto-Pagination with Token Refresh Mid-List
+
+**Scenario**: Installation token expires after the first page of `list_issue_comments()` is fetched
+but before the second page request.
+
+**Expected Behavior**:
+
+- Token refresh logic kicks in silently before the second page request
+- The second page request succeeds with the fresh token
+- Caller receives the complete comment list as if nothing happened
+
+**Handling Strategy**:
+
+- Check token expiry before each page request in the pagination loop (same as for single requests)
+- Do not propagate a 401 to the caller; treat it as a refresh trigger and retry the page once
+- Log the token refresh at DEBUG level
+
+**Test Cases**:
+
+- Token expires exactly between page 1 and page 2 requests
+- Token refresh itself fails (network error): propagate `ApiError::AuthenticationFailed`
+
+---
+
+### Edge Case 18: Reaction Creates Duplicate for Different User
+
+**Scenario**: User A has reacted with . The bot (a different user) also calls
+`create_issue_reaction` with `ReactionContent::PlusOne`.
+
+**Expected Behavior**:
+
+- GitHub creates a new, separate reaction for the bot
+- Returns HTTP 201 with the bot's reaction
+- Caller receives `Ok(Reaction)` for the bot's new reaction
+
+**Handling Strategy**:
+
+- This is the normal, happy-path case when users and the bot react independently
+- The duplicate-reaction idempotency (HTTP 200) only applies to the same authenticated user
+- No special handling needed beyond treating both 200 and 201 as `Ok(Reaction)`
+
+---
+
+### Edge Case 19: Issue Locked  Comment Creation Rejected
+
+**Scenario**: Bot attempts `create_issue_comment()` on an issue that has been locked and the bot
+does not have collaborator access.
+
+**Impact**:
+
+- GitHub returns HTTP 403
+- Bot cannot post the comment
+
+**Expected Behavior**:
+
+- `create_issue_comment()` returns `Err(ApiError::AuthorizationFailed)`
+- Error message does not expose the lock reason (GitHub's response handles this)
+- Callers should check issue lock status before attempting to comment if this is a concern
+
+**Handling Strategy**:
+
+- Map HTTP 403 to `ApiError::AuthorizationFailed` (existing pattern)
+- Callers can inspect `issue.locked` field returned by `get_issue()` before commenting
+
+---
+
+### Edge Case 20: Timeline Unknown Event Types
+
+**Scenario**: GitHub adds a new timeline event type that the SDK does not yet recognise (e.g.,
+a new `"sub_issue_added"` event kind introduced in a future GitHub API update).
+
+**Expected Behavior**:
+
+- The new event type deserializes to `TimelineEvent::Unknown` without error
+- The caller's result vector contains the `Unknown` variant for that item
+- No panic or deserialization failure occurs
+- SDK continues functioning for all known event types
+
+**Handling Strategy**:
+
+- The `TimelineEvent` enum uses `#[serde(other)]` or a custom deserializer for the catch-all
+- Callers can `match` on variants and use a wildcard `_` arm for `Unknown`
+- SDK does not log a warning for unknown types by default (too noisy); callers decide
+
+---
+
+### Edge Case 21: list_issue_activity_events with No Events
+
+**Scenario**: A freshly created issue has no activity events yet (only a "created" record, which
+GitHub sometimes omits from the events list on very new issues).
+
+**Expected Behavior**:
+
+- Returns `Ok(vec![])` (empty list, not an error)
+
+---
+
+### Edge Case 22: Assignment of Bot to Issue (Self-Assignment)
+
+**Scenario**: Bot assigns itself using `add_assignees_to_issue()` with its own login.
+
+**Expected Behavior**:
+
+- GitHub Apps can be assigned if the installation has collaborator access
+- If the app does not have collaborator access, GitHub silently ignores the login
+- Returns `Ok(Issue)` in both cases (GitHub never 422s for ineligible assignees)
+
+**Handling Strategy**:
+
+- No special handling needed; document this behaviour in the method's rustdoc
+- Callers can use `list_available_assignees()` to check eligibility before attempting
+
+---
+
+### Edge Case 23: Milestone Due Date in the Past
+
+**Scenario**: `create_milestone()` or `update_milestone()` is called with a `due_on` timestamp
+that is already in the past.
+
+**Expected Behavior**:
+
+- GitHub accepts past due dates without error
+- Returns `Ok(Milestone)` with the past `due_on` value
+- The milestone displays as "overdue" on GitHub's UI, but this is not an API error
+
+**Handling Strategy**:
+
+- No client-side validation of `due_on` in the past (GitHub permits it)
+- Document in rustdoc that GitHub accepts past dates
+
+---
+
+### Edge Case 24: Delete Milestone with Associated Open Issues
+
+**Scenario**: `delete_milestone()` is called on a milestone that still has open issues.
+
+**Expected Behavior**:
+
+- GitHub deletes the milestone without error
+- The associated issues lose their milestone reference (set to null by GitHub)
+- Returns `Ok(())`
+
+**Handling Strategy**:
+
+- No special handling; document this side-effect in the method's rustdoc
+- Callers who need to preserve milestone state must migrate issues first

@@ -248,6 +248,104 @@ Test doubles that simulate GitHub App authentication without real API calls.
 
 Sample GitHub webhook events used for testing bot behavior.
 
+## Issue Domain Concepts (Extended)
+
+### Issue Comment
+
+A text reply attached to an issue. Key to bot automation because bots post, read, and
+search comments to store state, communicate with humans, and implement mutual exclusion.
+
+- **ID**: Numeric comment identifier (unique across the repository, not just the issue)
+- **Body**: Markdown text; bots commonly embed structured prefixes for programmatic parsing
+- **Author**: Login of the user or bot that created the comment
+- **Created At**: UTC timestamp; ascending order (oldest first) is the GitHub default
+- **Auto-pagination**: `list_issue_comments()` must fetch all pages to produce a
+  correct result for state-reconstruction and lock-detection use cases (see ADR-002)
+
+### Reaction
+
+An emoji acknowledgement attached to an issue or issue comment by a GitHub user.
+
+- **Content**: One of eight emoji: 👍 (`+1`), 👎 (`-1`), 😄 (`laugh`), 😕 (`confused`),
+  ❤️ (`heart`), 🎉 (`hooray`), 🚀 (`rocket`), 👀 (`eyes`)
+- **Idempotent creation**: GitHub returns the existing reaction (200) if the user has
+  already reacted with the same emoji; no duplicate is created.
+- **Scope**: Reactions exist independently on issues and on individual comments.
+- **Bot use**: Bots use 👀 to signal "I received this" and ✅/❌ (via labels or comments)
+  for outcome signalling.
+
+### Issue Lock
+
+A moderation state that prevents non-collaborator comments on an issue.
+
+- **Lock Reason**: Optional; one of `off-topic`, `too-heated`, `resolved`, `spam`
+- **Effect**: Only users with write access (collaborators) can comment while locked
+- **Reversible**: Can be unlocked at any time by someone with admin or maintain permission
+- **Webhook**: Lock/unlock actions appear in the `IssueEvent` webhook and in the
+  issue activity event stream
+
+### Assignee
+
+A GitHub user who is responsible for an issue.
+
+- **Eligible users**: Only collaborators, org members with triage access, or repo contributors
+  can be assigned. `list_available_assignees()` returns the eligible set.
+- **Multiple**: Issues can have zero or more assignees simultaneously.
+- **Bot use**: Bots auto-assign issues based on routing rules (area, round-robin, etc.)
+- **Idempotent**: Adding an already-assigned user is a no-op (GitHub ignores it silently)
+
+### Milestone
+
+A named target grouping open and closed issues toward a shared goal.
+
+- **Number**: Repository-scoped integer; used in API calls (not the global ID)
+- **State**: `open` or `closed`
+- **Due On**: Optional UTC timestamp; bots use this for release deadline tracking
+- **Issue counts**: GitHub tracks `open_issues` and `closed_issues` on the milestone object
+- **Detach**: Setting `milestone: null` on an issue removes it from the milestone
+
+### Issue Activity Event
+
+A discrete historical record of a state change on an issue, returned by the issue events
+REST endpoint. Different from a **GitHub Webhook Event** (which is a push notification).
+
+- **Examples**: `labeled`, `unlabeled`, `assigned`, `unassigned`, `milestoned`,
+  `demilestoned`, `closed`, `reopened`, `renamed`, `locked`, `unlocked`, `referenced`
+- **Ordering**: Ascending chronological order
+- **Use case**: Audit trails, historical state reconstruction, debugging bot behaviour
+- **Not comments**: Comments do not appear in this stream; use the timeline endpoint for those
+
+### Issue Timeline
+
+A superset of issue activity events that also includes comments, cross-references,
+review events, and commit references. Returns a heterogeneous ordered sequence.
+
+- **Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/timeline`
+- **Items**: Mixed types identified by the `event` field on each object
+- **Use case**: Complete audit trail, full state reconstruction, cross-reference tracking
+- **Unknown kinds**: Unknown event types must deserialize gracefully to a catch-all variant
+
+### IssueCommentEvent (Webhook)
+
+A webhook event fired by GitHub when a comment on an issue is created, edited, or deleted.
+Not to be confused with the REST API issue activity stream.
+
+- **Header**: `X-GitHub-Event: issue_comment`
+- **Actions**: `created`, `edited`, `deleted`
+- **Payload**: Contains both the parent `issue` and the `comment` that changed
+- **Distinction**: The `issues` webhook covers issue lifecycle; `issue_comment` covers
+  comment lifecycle on issues only (not PR comments, which use `pull_request_review_comment`)
+
+### Auto-Pagination
+
+A pagination strategy where the SDK follows all `Link: rel="next"` headers automatically,
+returning a complete `Vec<T>` rather than a page-at-a-time `PagedResponse<T>`.
+
+- **When used**: For operations where callers need the complete set (see ADR-002)
+- **Page size**: `per_page=100` (GitHub maximum) to minimise round trips
+- **Memory**: All items are held in memory; appropriate for bounded collections
+- **Contrast**: `list_issues()` uses manual paging because the caller may stop early
+
 - **Representative**: Cover common GitHub event types and actions
 - **Edge Cases**: Include malformed or unusual event structures
 - **Complete**: Full event payloads with all relevant fields
@@ -329,6 +427,86 @@ A description of how a single file changed in a comparison.
 - **Changes**: Total lines changed (additions + deletions)
 - **Previous Filename**: Original path if file was renamed
 - **Patch**: Unified diff showing exact changes (may be truncated for large diffs)
+
+## Sub-Client API Concepts (ADR-003)
+
+### Domain Sub-Client
+
+A lightweight struct that groups GitHub API methods for a single business domain
+(issues, pull requests, labels, milestones, etc.) and is obtained from `InstallationClient`
+via an infallible factory method (`client.issues()`, `client.labels()`, etc.).
+
+- **Construction**: No API call; O(1) cost (at most an `Arc` increment)
+- **Lifetime**: Sub-clients can be stored, cloned, and passed across async tasks
+- **Scope**: Each sub-client covers exactly one business domain
+- **Delegation**: All HTTP calls go through the parent `InstallationClient`'s generic helpers
+- **Rationale**: Avoids placing 85+ methods on one type; groups related operations for discoverability
+
+### IssuesClient
+
+The domain sub-client for GitHub issues. Covers issue CRUD, comments, reactions,
+label application, assignees, locking, milestone assignment, and timeline queries.
+
+- **Obtained via**: `InstallationClient::issues()`
+- **Source file**: `src/client/issue.rs`
+
+### LabelsClient
+
+The domain sub-client for the **repository-level label catalogue**. Manages the
+`Label` definitions that exist in a repository (`list`, `get`, `create`, `update`, `delete`).
+
+- **Distinct from**: Applying labels to individual issues (→ `IssuesClient`) or PRs (→ `PullRequestsClient`)
+- **Obtained via**: `InstallationClient::labels()`
+- **Source file**: `src/client/issue.rs`
+
+### MilestonesClient
+
+The domain sub-client for milestone lifecycle management. Covers `list`, `get`, `create`,
+`update`, and `delete` of milestone definitions.
+
+- **Distinct from**: Assigning a milestone to an issue (→ `IssuesClient::set_milestone`) or PR (→ `PullRequestsClient::set_milestone`)
+- **Obtained via**: `InstallationClient::milestones()`
+- **Source file**: `src/client/issue.rs`
+
+### PullRequestsClient
+
+The domain sub-client for pull requests. Covers PR CRUD, reviews, conversation-thread
+comments, label application, and milestone assignment.
+
+- **Obtained via**: `InstallationClient::pull_requests()`
+- **Source file**: `src/client/pull_request.rs`
+
+### RepositoriesClient
+
+The domain sub-client for repository metadata, branch management, Git references,
+tags, and commit history.
+
+- **Obtained via**: `InstallationClient::repositories()`
+- **Source files**: `src/client/repository.rs`, `src/client/commit.rs`
+
+### WorkflowsClient
+
+The domain sub-client for GitHub Actions workflows and runs (`list`, `get`, `trigger`,
+`list_runs`, `get_run`, `cancel_run`, `rerun_run`).
+
+- **Obtained via**: `InstallationClient::workflows()`
+- **Source file**: `src/client/workflow.rs`
+
+### ReleasesClient
+
+The domain sub-client for GitHub Releases (`list`, `get`, `get_latest`, `get_by_tag`,
+`create`, `update`, `delete`).
+
+- **Obtained via**: `InstallationClient::releases()`
+- **Source file**: `src/client/release.rs`
+
+### ProjectsClient
+
+The domain sub-client for GitHub Projects V2 (`list_for_org`, `list_for_user`, `get`,
+`add_item`, `remove_item`, `list_for_issue`).
+
+- **Obtained via**: `InstallationClient::projects()`
+- **Source file**: `src/client/project.rs`
 
 ### Git Signature
 

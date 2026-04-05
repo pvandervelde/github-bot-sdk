@@ -128,6 +128,10 @@ pub enum ReviewState {
     ChangesRequested,
     Commented,
     Dismissed,
+    /// Review started but not yet submitted. GitHub returns this for in-progress
+    /// review drafts. Without this variant, deserializing a PR with a pending
+    /// review draft would produce a serde error.
+    Pending,
 }
 ```
 
@@ -260,7 +264,10 @@ with `pull_request_`) because the sub-client context makes the domain clear.
 
 ```rust
 impl PullRequestsClient {
-    /// List reviews for a pull request in chronological order.
+    /// List all reviews for a pull request in chronological order.
+    ///
+    /// Auto-paginates using `per_page=100` (ADR-002). The review set per PR is
+    /// bounded and callers typically need the complete history.
     pub async fn list_reviews(
         &self,
         owner: &str,
@@ -270,7 +277,7 @@ impl PullRequestsClient {
 }
 ```
 
-**Endpoint**: `GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews`
+**Endpoint**: `GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews?per_page=100`
 
 ### `get_review`
 
@@ -475,6 +482,10 @@ impl PullRequestsClient {
 impl PullRequestsClient {
     /// Remove a single label from a pull request.
     ///
+    /// # Returns
+    ///
+    /// The remaining labels on the PR after removal.
+    ///
     /// # Errors
     ///
     /// * `ApiError::NotFound` — label not applied to this PR
@@ -484,7 +495,7 @@ impl PullRequestsClient {
         repo: &str,
         pull_number: u64,
         label_name: &str,
-    ) -> Result<(), ApiError>;
+    ) -> Result<Vec<Label>, ApiError>;
 }
 ```
 
@@ -609,9 +620,10 @@ let request = CreatePullRequestRequest {
     base: "main".to_string(),
     body: Some("Description of changes".to_string()),
     draft: Some(false),
+    ..Default::default()
 };
 
-let pr = client.create_pull_request("owner", "repo", &request).await?;
+let pr = client.pull_requests().create("owner", "repo", &request).await?;
 println!("Created PR #{}", pr.number);
 ```
 
@@ -623,7 +635,7 @@ let review = CreateReviewRequest {
     event: ReviewEvent::Approve,
 };
 
-client.create_pull_request_review("owner", "repo", 42, &review).await?;
+client.pull_requests().create_review("owner", "repo", 42, &review).await?;
 ```
 
 ### Merge a Pull Request
@@ -635,7 +647,7 @@ let merge_opts = MergePullRequestRequest {
     ..Default::default()
 };
 
-let result = client.merge_pull_request("owner", "repo", 42, Some(&merge_opts)).await?;
+let result = client.pull_requests().merge("owner", "repo", 42, Some(&merge_opts)).await?;
 println!("Merged: {}", result.sha);
 ```
 

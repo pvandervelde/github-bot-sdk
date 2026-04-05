@@ -147,15 +147,19 @@ All installation client interfaces are part of the **GitHub Bot SDK** library:
 
 Types are organized by domain in separate files:
 
-- `installation.rs` - InstallationClient core
-- `repository.rs` - Repository, Branch, GitRef types and operations
-- `issue.rs` - Issue, Comment, Label types and operations
-- `pull_request.rs` - PullRequest, Review types and operations
-- `milestone.rs` - Milestone types and operations
-- `workflow.rs` - Workflow, WorkflowRun types and operations
-- `release.rs` - Release types and operations
+- `installation.rs` - InstallationClient and sub-client factory methods
+- `repository.rs` - RepositoriesClient, Repository, Branch, GitRef types
+- `commit.rs` - commit operation helpers (part of RepositoriesClient)
+- `issue.rs` - IssuesClient, LabelsClient, MilestonesClient, Issue, Comment, Label, Reaction types
+- `pull_request.rs` - PullRequestsClient, PullRequest, Review types
+- `workflow.rs` - WorkflowsClient, Workflow, WorkflowRun types
+- `release.rs` - ReleasesClient, Release types
+- `project.rs` - ProjectsClient, ProjectV2 types
 - `pagination.rs` - PagedResponse generic type
 - `retry.rs` - RetryPolicy and backoff strategies
+
+**Note**: There is no `milestone.rs` file — `MilestonesClient` and all milestone types
+live in `issue.rs` (see constraints.md Sub-Client File Placement table).
 
 ## Naming Conventions
 

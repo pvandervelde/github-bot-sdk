@@ -470,6 +470,9 @@ management (creating/updating label definitions), use `LabelsClient`.
 ```rust
 impl IssuesClient {
     /// List labels currently applied to an issue.
+    ///
+    /// Auto-paginates using `per_page=100` (ADR-002). The label set per issue
+    /// is bounded; returning all at once is appropriate.
     pub async fn list_labels(
         &self,
         owner: &str,
@@ -479,7 +482,7 @@ impl IssuesClient {
 }
 ```
 
-**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/labels`
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/labels?per_page=100`
 
 ### `add_labels`
 

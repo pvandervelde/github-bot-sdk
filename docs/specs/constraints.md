@@ -420,26 +420,26 @@ All public types/methods MUST have complete rustdoc with examples, parameters, e
 
 ### Auto-Pagination
 
-- `list_issue_comments()` MUST auto-paginate using `per_page=100` and follow all `Link: rel="next"` headers (ADR-002)
+- `issues().list_comments()` MUST auto-paginate using `per_page=100` and follow all `Link: rel="next"` headers (ADR-002)
 - All other auto-paginating list methods (reactions, activity events, timeline, milestones, available assignees) MUST follow the same loop pattern
-- Auto-pagination MUST propagate any `ApiError` immediately on a page fetch failure  do not return a partial list
-- Subsequent page URLs MUST be used verbatim from the `Link` header  do not reconstruct URLs manually
+- Auto-pagination MUST propagate any `ApiError` immediately on a page fetch failure — do not return a partial list
+- Subsequent page URLs MUST be used verbatim from the `Link` header — do not reconstruct URLs manually
 
 ### Reactions
 
-- `create_issue_reaction()` and `create_comment_reaction()` MUST treat both HTTP 200 and HTTP 201 responses as `Ok(Reaction)`
+- `issues().create_reaction()` and `issues().create_comment_reaction()` MUST treat both HTTP 200 and HTTP 201 responses as `Ok(Reaction)`
 - `ReactionContent::PlusOne` and `ReactionContent::MinusOne` MUST serialize to `"+1"` and `"-1"` respectively (GitHub API names)
 
 ### Issue Locking
 
-- `lock_issue()` MUST use HTTP PUT to `/repos/{owner}/{repo}/issues/{number}/lock`
-- `unlock_issue()` MUST use HTTP DELETE to the same path
+- `issues().lock()` MUST use HTTP PUT to `/repos/{owner}/{repo}/issues/{number}/lock`
+- `issues().unlock()` MUST use HTTP DELETE to the same path
 - Both methods treat HTTP 204 as success
 - `LockReason` MUST serialize with kebab-case (`off-topic`, `too-heated`, `resolved`, `spam`)
 
 ### Assignees
 
-- `remove_assignees_from_issue()` MUST use HTTP DELETE with a JSON body containing `{ "assignees": [...] }`  GitHub requires a body on this DELETE
+- `issues().remove_assignees()` MUST use HTTP DELETE with a JSON body containing `{ "assignees": [...] }` — GitHub requires a body on this DELETE
 - Implementations MUST NOT validate assignee eligibility client-side; GitHub's silent ignore is the authoritative behaviour
 
 ### Timeline Deserialization
@@ -456,8 +456,8 @@ All public types/methods MUST have complete rustdoc with examples, parameters, e
 
 ### Milestone CRUD
 
-- Milestone CRUD methods (`get_milestone`, `list_milestones`, `create_milestone`, `update_milestone`, `delete_milestone`) live in `src/client/issue.rs` alongside the existing `Milestone` type and `set_issue_milestone()`
-- There is NO separate `milestone.rs` file  the note in `additional-operations.md` predates the decision to consolidate in `issue.rs`
+- `milestones().get()`, `milestones().list()`, `milestones().create()`, `milestones().update()`, `milestones().delete()` live in `src/client/issue.rs` alongside the existing `Milestone` type and `issues().set_milestone()`
+- There is NO separate `milestone.rs` file — the note in `additional-operations.md` predates the decision to consolidate in `issue.rs`
 
 ---
 
@@ -524,6 +524,8 @@ All public types/methods MUST have complete rustdoc with examples, parameters, e
 | `issues().list_available_assignees` | Auto-paginated | Bounded collaborator set |
 | `issues().list_activity_events` | Auto-paginated | Bounded per issue |
 | `issues().list_timeline` | Auto-paginated | Must be complete for audit |
+| `issues().list_labels` | Auto-paginated | Bounded per issue |
+| `pull_requests().list_reviews` | Auto-paginated | Bounded per PR |
 | `repositories().list_branches` | Auto-paginated | Bounded per repo |
 | `repositories().list_tags` | Auto-paginated | Bounded per repo |
 | `issues().list` | Manual (`PagedResponse<T>`) | Caller may stop early; unbounded in large repos |

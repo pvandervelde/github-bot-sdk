@@ -71,8 +71,12 @@ pub struct CreateLabelRequest {
 /// Request to update an existing label definition.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct UpdateLabelRequest {
-    /// New name (renames the label — all existing references update automatically)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// New name (renames the label — all existing references update automatically).
+    ///
+    /// The field is called `new_name` in Rust to distinguish it from the `name`
+    /// path parameter on the `update` method. The GitHub API expects the JSON key
+    /// to be `"name"`, so the serde rename is required.
+    #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
     pub new_name: Option<String>,
     /// New color (6-digit hex without '#')
     #[serde(skip_serializing_if = "Option::is_none")]

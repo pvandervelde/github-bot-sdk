@@ -1,7 +1,14 @@
 # Reactions Interface Specification
 
-**Module**: `github-bot-sdk::client::issue` (extends `issue.rs`)
-**Dependencies**: `InstallationClient`, `ApiError`, `IssueUser`, `Comment`
+**Module**: `github-bot-sdk::client::issue`
+**Contained in**: `src/client/issue.rs`
+
+> **Scope**: This file defines the *types* only. The reaction methods themselves
+> (`list_reactions`, `create_reaction`, `delete_reaction`, `list_comment_reactions`,
+> `create_comment_reaction`, `delete_comment_reaction`) are specified in
+> `issue-operations.md` as part of `IssuesClient`. See ADR-003.
+
+**Dependencies**: `ApiError`, `IssueUser`, `Comment`
 
 ## Overview
 
@@ -80,216 +87,16 @@ pub struct Reaction {
 }
 ```
 
-## Issue Reaction Operations
+## API Endpoints (for reference)
 
-### List Issue Reactions
+| Attachment | Endpoint |
+|-----------|----------|
+| Issue reactions | `GET/POST/DELETE /repos/{owner}/{repo}/issues/{issue_number}/reactions[/{id}]` |
+| Comment reactions | `GET/POST/DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions[/{id}]` |
 
-```rust
-impl InstallationClient {
-    /// List all reactions on an issue.
-    ///
-    /// Auto-paginates through all results (see ADR-002).
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    ///
-    /// # Returns
-    ///
-    /// All reactions on the issue, across all pages.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Issue doesn't exist
-    /// * `ApiError::AuthorizationFailed` - Missing `issues:read`
-    pub async fn list_issue_reactions(
-        &self,
-        owner: &str,
-        repo: &str,
-        issue_number: u64,
-    ) -> Result<Vec<Reaction>, ApiError>;
-}
-```
-
-**Endpoint**: `GET /repos/{owner}/{repo}/issues/{issue_number}/reactions?per_page=100`
-
-### Create Issue Reaction
-
-```rust
-impl InstallationClient {
-    /// Add a reaction to an issue.
-    ///
-    /// If the authenticated user has already reacted with this emoji,
-    /// GitHub returns the existing reaction (200) rather than creating a
-    /// duplicate (201). Both cases return `Ok(Reaction)`.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    /// * `content` - The emoji reaction to add
-    ///
-    /// # Returns
-    ///
-    /// The created or existing `Reaction`.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Issue doesn't exist
-    /// * `ApiError::AuthorizationFailed` - Missing `issues:write`
-    pub async fn create_issue_reaction(
-        &self,
-        owner: &str,
-        repo: &str,
-        issue_number: u64,
-        content: ReactionContent,
-    ) -> Result<Reaction, ApiError>;
-}
-```
-
-**Endpoint**: `POST /repos/{owner}/{repo}/issues/{issue_number}/reactions`
-**Body**: `{ "content": "+1" }`
-**Success codes**: 200 (already exists) and 201 (created) both succeed.
-
-### Delete Issue Reaction
-
-```rust
-impl InstallationClient {
-    /// Remove a reaction from an issue.
-    ///
-    /// Only the authenticated user can delete their own reactions.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `issue_number` - Issue number
-    /// * `reaction_id` - ID of the reaction to remove
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Issue or reaction doesn't exist
-    /// * `ApiError::AuthorizationFailed` - Missing `issues:write`
-    pub async fn delete_issue_reaction(
-        &self,
-        owner: &str,
-        repo: &str,
-        issue_number: u64,
-        reaction_id: u64,
-    ) -> Result<(), ApiError>;
-}
-```
-
-**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/{issue_number}/reactions/{reaction_id}`
-**Success code**: 204 No Content
-
-## Issue Comment Reaction Operations
-
-### List Comment Reactions
-
-```rust
-impl InstallationClient {
-    /// List all reactions on an issue comment.
-    ///
-    /// Auto-paginates through all results (see ADR-002).
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `comment_id` - Comment ID (not the issue number)
-    ///
-    /// # Returns
-    ///
-    /// All reactions on the comment, across all pages.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Comment doesn't exist
-    /// * `ApiError::AuthorizationFailed` - Missing `issues:read`
-    pub async fn list_comment_reactions(
-        &self,
-        owner: &str,
-        repo: &str,
-        comment_id: u64,
-    ) -> Result<Vec<Reaction>, ApiError>;
-}
-```
-
-**Endpoint**: `GET /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions?per_page=100`
-
-### Create Comment Reaction
-
-```rust
-impl InstallationClient {
-    /// Add a reaction to an issue comment.
-    ///
-    /// If the authenticated user has already reacted with this emoji,
-    /// GitHub returns the existing reaction (200) rather than a duplicate.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `comment_id` - Comment ID (not the issue number)
-    /// * `content` - The emoji reaction to add
-    ///
-    /// # Returns
-    ///
-    /// The created or existing `Reaction`.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Comment doesn't exist
-    /// * `ApiError::AuthorizationFailed` - Missing `issues:write`
-    pub async fn create_comment_reaction(
-        &self,
-        owner: &str,
-        repo: &str,
-        comment_id: u64,
-        content: ReactionContent,
-    ) -> Result<Reaction, ApiError>;
-}
-```
-
-**Endpoint**: `POST /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions`
-**Body**: `{ "content": "eyes" }`
-**Success codes**: 200 (already exists) and 201 (created) both succeed.
-
-### Delete Comment Reaction
-
-```rust
-impl InstallationClient {
-    /// Remove a reaction from an issue comment.
-    ///
-    /// Only the authenticated user can delete their own reactions.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `comment_id` - Comment ID (not the issue number)
-    /// * `reaction_id` - ID of the reaction to remove
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::NotFound` - Comment or reaction doesn't exist
-    /// * `ApiError::AuthorizationFailed` - Missing `issues:write`
-    pub async fn delete_comment_reaction(
-        &self,
-        owner: &str,
-        repo: &str,
-        comment_id: u64,
-        reaction_id: u64,
-    ) -> Result<(), ApiError>;
-}
-```
-
-**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions/{reaction_id}`
-**Success code**: 204 No Content
+For method signatures, error mapping, and pagination behaviour see `issue-operations.md`
+(`IssuesClient::list_reactions`, `create_reaction`, `delete_reaction`,
+`list_comment_reactions`, `create_comment_reaction`, `delete_comment_reaction`).
 
 ## Implementation Location
 

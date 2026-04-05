@@ -119,6 +119,22 @@ pub enum MilestoneSortField {
 }
 ```
 
+### `SortDirection`
+
+```rust
+/// Sort direction for list queries.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+```
+
+This type is shared across domain clients. The interface designer may hoist it to a
+common module (e.g. `src/client/mod.rs`) so it can be reused by `list_commits`,
+`list_milestones`, and any future sorted-list operations without duplication.
+
 ## Operations
 
 ### `list` ⚡ *auto-paginated*

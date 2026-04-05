@@ -563,3 +563,280 @@ This document defines testable behavioral assertions for the GitHub Bot SDK. The
 - Performance targets met
 - Single API call per operation
 - No redundant requests
+
+---
+
+## Issue Extended Operations Assertions
+
+### Assertion 38: list_issue_comments Returns All Pages
+
+**Given**: An issue with 150 comments (two pages of 100 + 50)
+**When**: `list_issue_comments(owner, repo, issue_number)` is called
+**Then**: Returns `Ok(Vec<Comment>)` with all 150 comments
+**And**: Comments are in ascending `created_at` order (oldest first)
+**And**: Exactly two HTTP requests were made (one per page)
+
+**Test Criteria**:
+
+- Result length is 150
+- Timestamps are non-decreasing across the full result
+- First request uses `per_page=100`; second follows `Link: rel="next"` URL verbatim
+- No third HTTP request is made after the last page
+
+### Assertion 39: list_issue_comments on Non-Existent Issue
+
+**Given**: An issue number that does not exist in the repository
+**When**: `list_issue_comments(owner, repo, 9999999)` is called
+**Then**: Returns `Err(ApiError::NotFound)`
+**And**: Error propagates immediately without further page requests
+
+**Test Criteria**:
+
+- Error type is `ApiError::NotFound`
+- Exactly one HTTP request was made
+- No partial results returned
+
+### Assertion 40: list_issue_comments on Empty Issue
+
+**Given**: An issue with zero comments
+**When**: `list_issue_comments(owner, repo, issue_number)` is called
+**Then**: Returns `Ok(vec![])`
+
+**Test Criteria**:
+
+- Result is an empty vector, not an error
+- Exactly one HTTP request was made
+
+### Assertion 41: add_assignees_to_issue with Eligible Users
+
+**Given**: Users "alice" and "bob" are collaborators in the repository
+**When**: `add_assignees_to_issue(owner, repo, 1, vec!["alice", "bob"])` is called
+**Then**: Returns `Ok(Issue)` with both users in the `assignees` field
+**And**: A POST to `/repos/{owner}/{repo}/issues/1/assignees` was made
+
+**Test Criteria**:
+
+- Updated issue contains both assignees
+- Body sent was `{ "assignees": ["alice", "bob"] }`
+
+### Assertion 42: add_assignees_to_issue with Ineligible User (Silent Ignore)
+
+**Given**: User "external-user" is not a collaborator
+**When**: `add_assignees_to_issue(owner, repo, 1, vec!["external-user"])` is called
+**Then**: Returns `Ok(Issue)` with no change to the assignee list
+**And**: GitHub silently ignores the ineligible user (no 422)
+
+**Test Criteria**:
+
+- Returns `Ok(Issue)` (not an error)
+- Assignee list unchanged in returned issue
+
+### Assertion 43: remove_assignees_from_issue
+
+**Given**: Issue 1 is currently assigned to "alice"
+**When**: `remove_assignees_from_issue(owner, repo, 1, vec!["alice"])` is called
+**Then**: Returns `Ok(Issue)` with empty assignees
+**And**: A DELETE to `/repos/{owner}/{repo}/issues/1/assignees` was made with the body
+
+**Test Criteria**:
+
+- Returned issue has empty assignees list
+- HTTP method is DELETE (not POST); body contains `{ "assignees": ["alice"] }`
+
+### Assertion 44: lock_issue with Reason
+
+**Given**: An open, unlocked issue
+**When**: `lock_issue(owner, repo, 42, Some(LockReason::TooHeated))` is called
+**Then**: Returns `Ok(())`
+**And**: A PUT to `/repos/{owner}/{repo}/issues/42/lock` was made
+**And**: Request body contained `{ "lock_reason": "too heated" }`
+
+**Test Criteria**:
+
+- HTTP status 204 treated as success
+- `lock_reason` serialised as `"too heated"` (kebab-case)
+
+### Assertion 45: lock_issue without Reason
+
+**Given**: An open, unlocked issue
+**When**: `lock_issue(owner, repo, 42, None)` is called
+**Then**: Returns `Ok(())`
+**And**: Request body is empty (or omits the `lock_reason` field)
+
+**Test Criteria**:
+
+- No `lock_reason` key in JSON body when reason is `None`
+
+### Assertion 46: unlock_issue
+
+**Given**: A locked issue
+**When**: `unlock_issue(owner, repo, 42)` is called
+**Then**: Returns `Ok(())`
+**And**: A DELETE to `/repos/{owner}/{repo}/issues/42/lock` was made
+
+**Test Criteria**:
+
+- HTTP status 204 treated as success
+- No body required
+
+### Assertion 47: replace_labels_on_issue Atomically Replaces All Labels
+
+**Given**: Issue 3 currently has labels ["bug", "help-wanted"]
+**When**: `replace_labels_on_issue(owner, repo, 3, vec!["enhancement".into()])` is called
+**Then**: Returns `Ok(Vec<Label>)` containing only "enhancement"
+**And**: "bug" and "help-wanted" are no longer on the issue
+
+**Test Criteria**:
+
+- Result contains exactly one label: "enhancement"
+- A PUT (not POST) request was made
+- Body was `{ "labels": ["enhancement"] }`
+
+### Assertion 48: replace_labels_on_issue with Empty List Clears All Labels
+
+**Given**: Issue 3 with existing labels
+**When**: `replace_labels_on_issue(owner, repo, 3, vec![])` is called
+**Then**: Returns `Ok(vec![])`
+**And**: All labels removed
+
+**Test Criteria**:
+
+- Body sent was `{ "labels": [] }`
+- Result is empty vector
+
+### Assertion 49: create_issue_reaction Returns Existing on Duplicate
+
+**Given**: The authenticated bot has already reacted with 👀 on issue 1
+**When**: `create_issue_reaction(owner, repo, 1, ReactionContent::Eyes)` is called again
+**Then**: Returns `Ok(Reaction)` (not an error)
+**And**: GitHub returns HTTP 200 (not 201) for the duplicate
+
+**Test Criteria**:
+
+- Both HTTP 200 and HTTP 201 from GitHub result in `Ok(Reaction)`
+- The returned `Reaction` has the same `id` as the original
+
+### Assertion 50: create_issue_reaction on Non-Existent Issue
+
+**Given**: Issue number that does not exist
+**When**: `create_issue_reaction(owner, repo, 9999, ReactionContent::PlusOne)` is called
+**Then**: Returns `Err(ApiError::NotFound)`
+
+**Test Criteria**:
+
+- Error type is `ApiError::NotFound`
+
+### Assertion 51: delete_issue_reaction Succeeds
+
+**Given**: A known reaction ID 42 on issue 1
+**When**: `delete_issue_reaction(owner, repo, 1, 42)` is called
+**Then**: Returns `Ok(())`
+**And**: A DELETE to `/repos/{owner}/{repo}/issues/1/reactions/42` was made
+
+**Test Criteria**:
+
+- HTTP 204 treated as success
+
+### Assertion 52: list_issue_reactions Auto-Paginates
+
+**Given**: Issue with 150 reactions across two pages
+**When**: `list_issue_reactions(owner, repo, issue_number)` is called
+**Then**: Returns all 150 reactions
+**And**: Two HTTP requests were made following `Link: rel="next"`
+
+**Test Criteria**:
+
+- Result length is 150
+- Two requests made
+
+### Assertion 53: Comment reactions follow identical contract to issue reactions
+
+All assertions from 49–52 apply symmetrically to:
+
+- `create_comment_reaction()`
+- `delete_comment_reaction()`
+- `list_comment_reactions()`
+
+with the endpoint swapped to `/repos/{owner}/{repo}/issues/comments/{comment_id}/reactions`.
+
+**Test Criteria**:
+
+- Identical success and error behaviour
+- Correct endpoint used (`issues/comments/{id}` not `issues/{number}`)
+
+### Assertion 54: create_milestone Returns Created Milestone
+
+**Given**: Repository with `issues:write` permission
+**When**: `create_milestone(owner, repo, CreateMilestoneRequest { title: "v2.0", .. })` is called
+**Then**: Returns `Ok(Milestone)` with a GitHub-assigned `number`
+**And**: Milestone `title` matches the request
+
+**Test Criteria**:
+
+- HTTP 201 treated as success
+- `number` is non-zero
+
+### Assertion 55: create_milestone with Duplicate Title Returns InvalidRequest
+
+**Given**: Milestone "v2.0" already exists in the repository
+**When**: `create_milestone(owner, repo, ...)` is called with title "v2.0"
+**Then**: Returns `Err(ApiError::InvalidRequest { .. })`
+
+**Test Criteria**:
+
+- GitHub returns HTTP 422; maps to `ApiError::InvalidRequest`
+
+### Assertion 56: delete_milestone Succeeds
+
+**Given**: Milestone number 3 exists
+**When**: `delete_milestone(owner, repo, 3)` is called
+**Then**: Returns `Ok(())`
+**And**: HTTP 204 was returned
+
+**Test Criteria**:
+
+- Milestone is removed
+- Associated issues retain their milestone field until manually cleared
+
+### Assertion 57: list_issue_activity_events Returns All Events
+
+**Given**: Issue 5 with 120 recorded activity events (two pages)
+**When**: `list_issue_activity_events(owner, repo, 5)` is called
+**Then**: Returns all 120 events in ascending chronological order
+**And**: Two HTTP requests were made
+
+**Test Criteria**:
+
+- Result length is 120
+- Events sorted oldest-first
+- Second request follows `Link: rel="next"` verbatim
+
+### Assertion 58: list_issue_timeline Returns Mixed Event Types Without Error
+
+**Given**: Issue with a mix of commented, labeled, closed, and referenced events
+**When**: `list_issue_timeline(owner, repo, issue_number)` is called
+**Then**: Returns `Ok(Vec<TimelineEvent>)` with all items
+**And**: Each item deserializes to the correct `TimelineEvent` variant
+**And**: Unknown event types deserialize to `TimelineEvent::Unknown` without panicking
+
+**Test Criteria**:
+
+- No deserialization errors
+- Commented variant contains body text
+- Labeled variant contains label name
+- Unknown variant does not cause an `Err`
+
+### Assertion 59: IssueCommentEvent Webhook Deserializes Correctly
+
+**Given**: Raw `issue_comment` webhook payload with `action: "created"`
+**When**: `serde_json::from_value::<IssueCommentEvent>(payload)` is called
+**Then**: Returns `Ok(IssueCommentEvent)` with correct fields
+**And**: `action` is `IssueCommentAction::Created`
+**And**: `issue` contains the parent issue metadata
+**And**: `comment` contains the new comment body
+
+**Test Criteria**:
+
+- All three action variants (`created`, `edited`, `deleted`) deserialize correctly
+- `issue.number` matches the issue number in the payload
+- `comment.body` contains the comment text

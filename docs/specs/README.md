@@ -177,7 +177,8 @@ Security architecture, threat model, and mitigations
 
 - [installation-client.md](interfaces/installation-client.md) - Client foundation
 - [repository-operations.md](interfaces/repository-operations.md) - Repository API
-- [issue-operations.md](interfaces/issue-operations.md) - Issue and comment API
+- [issue-operations.md](interfaces/issue-operations.md) - Issue, comment, assignee, label, lock, milestone, timeline API
+- [reactions.md](interfaces/reactions.md) - Emoji reactions on issues and comments
 - [pull-request-operations.md](interfaces/pull-request-operations.md) - Pull request API
 - [project-operations.md](interfaces/project-operations.md) - Project management API
 - [pagination.md](interfaces/pagination.md) - Pagination support

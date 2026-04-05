@@ -1,18 +1,37 @@
-# Pull Request Operations Interface Specification
+# PullRequestsClient Interface Specification
 
 **Module**: `github-bot-sdk::client::pull_request`
-**File**: `crates/github-bot-sdk/src/client/pull_request.rs`
-**Dependencies**: `InstallationClient`, `ApiError`, issue types (User, Label), shared types
+**Struct**: `PullRequestsClient`
+**Obtained via**: `InstallationClient::pull_requests()`
+**Source file**: `src/client/pull_request.rs`
+
+See **ADR-003** for the sub-client pattern rationale.
 
 ## Overview
 
-Pull request operations provide access to PR management, reviews, and merge operations. These are installation-scoped operations requiring appropriate repository permissions.
+`PullRequestsClient` provides PR management, review management, inline comments,
+label application, and merge operations scoped to pull requests.
 
-## Architectural Location
+## Sub-Client Type
 
-**Layer**: Infrastructure adapter (GitHub API operations)
-**Purpose**: Pull request and review management
-**Required Permissions**: `pull_requests:read` (minimum), `pull_requests:write` (for mutations)
+```rust
+/// Domain client for pull request operations.
+///
+/// Obtained via `InstallationClient::pull_requests()`. Cheap to clone (Arc-backed).
+#[derive(Debug, Clone)]
+pub struct PullRequestsClient {
+    // Internal representation chosen by interface designer
+}
+```
+
+## Permissions
+
+| Operation group | Minimum permission |
+|----------------|--------------------|
+| `list`, `get` | `pull_requests: read` |
+| `create`, `update`, `merge` | `pull_requests: write` |
+| Reviews | `pull_requests: write` |
+| Comments | `pull_requests: write` (write) / `pull_requests: read` (list) |
 
 ## Core Types
 
@@ -114,27 +133,16 @@ pub enum ReviewState {
 
 ## Pull Request Operations
 
-### Get Pull Request
+### `get`
 
 ```rust
-impl InstallationClient {
+impl PullRequestsClient {
     /// Get a specific pull request by number.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    ///
-    /// # Returns
-    ///
-    /// Returns `PullRequest` with full metadata.
     ///
     /// # Errors
     ///
-    /// * `ApiError::NotFound` - PR doesn't exist
-    /// * `ApiError::PermissionDenied` - Missing `pull_requests:read`
-    pub async fn get_pull_request(
+    /// * `ApiError::NotFound` — PR doesn't exist
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
@@ -143,51 +151,37 @@ impl InstallationClient {
 }
 ```
 
-### List Pull Requests
+**Endpoint**: `GET /repos/{owner}/{repo}/pulls/{pull_number}`
+
+### `list`
+
+Returns the first page of pull requests matching the filter criteria (manual pagination).
 
 ```rust
-impl InstallationClient {
+impl PullRequestsClient {
     /// List pull requests in a repository.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `params` - Optional query parameters (state, head, base, etc.)
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of pull requests matching criteria.
-    pub async fn list_pull_requests(
+    pub async fn list(
         &self,
         owner: &str,
         repo: &str,
         params: Option<&ListPullRequestsParams>,
-    ) -> Result<Vec<PullRequest>, ApiError>;
+    ) -> Result<PagedResponse<PullRequest>, ApiError>;
 }
 ```
 
-### Create Pull Request
+**Endpoint**: `GET /repos/{owner}/{repo}/pulls`
+
+### `create`
 
 ```rust
-impl InstallationClient {
+impl PullRequestsClient {
     /// Create a new pull request.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `request` - PR creation data
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `PullRequest`.
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing `pull_requests:write`
-    /// * `ApiError::HttpError` - Invalid branch or no commits (422)
-    pub async fn create_pull_request(
+    /// * `ApiError::AuthorizationFailed` — Missing `pull_requests: write`
+    /// * `ApiError::InvalidRequest` — Invalid branch or no commits (422)
+    pub async fn create(
         &self,
         owner: &str,
         repo: &str,
@@ -196,23 +190,14 @@ impl InstallationClient {
 }
 ```
 
-### Update Pull Request
+**Endpoint**: `POST /repos/{owner}/{repo}/pulls`
+
+### `update`
 
 ```rust
-impl InstallationClient {
+impl PullRequestsClient {
     /// Update an existing pull request.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    /// * `request` - Update data
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `PullRequest`.
-    pub async fn update_pull_request(
+    pub async fn update(
         &self,
         owner: &str,
         repo: &str,
@@ -222,28 +207,20 @@ impl InstallationClient {
 }
 ```
 
-### Merge Pull Request
+**Endpoint**: `PATCH /repos/{owner}/{repo}/pulls/{pull_number}`
+
+### `merge`
 
 ```rust
-impl InstallationClient {
+impl PullRequestsClient {
     /// Merge a pull request.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    /// * `request` - Merge options
-    ///
-    /// # Returns
-    ///
-    /// Returns merge result with SHA and status.
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing merge permission
-    /// * `ApiError::HttpError` - Not mergeable (405), conflicts exist (409)
-    pub async fn merge_pull_request(
+    /// * `ApiError::AuthorizationFailed` — Missing merge permission
+    /// * `ApiError::HttpError { status: 405 }` — Not mergeable
+    /// * `ApiError::HttpError { status: 409 }` — Merge conflict
+    pub async fn merge(
         &self,
         owner: &str,
         repo: &str,
@@ -253,185 +230,16 @@ impl InstallationClient {
 }
 ```
 
-## Review Operations
+**Endpoint**: `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge`
 
-### List Reviews
-
-```rust
-impl InstallationClient {
-    /// List reviews for a pull request.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of reviews in chronological order.
-    pub async fn list_pull_request_reviews(
-        &self,
-        owner: &str,
-        repo: &str,
-        pull_number: u64,
-    ) -> Result<Vec<Review>, ApiError>;
-}
-```
-
-### Create Review
+### `set_milestone`
 
 ```rust
-impl InstallationClient {
-    /// Create a review for a pull request.
+impl PullRequestsClient {
+    /// Set (or clear) the milestone on a pull request.
     ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    /// * `request` - Review data
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `Review`.
-    ///
-    /// # Errors
-    ///
-    /// * `ApiError::PermissionDenied` - Missing permission
-    /// * `ApiError::HttpError` - Already reviewed (422)
-    pub async fn create_pull_request_review(
-        &self,
-        owner: &str,
-        repo: &str,
-        pull_number: u64,
-        request: &CreateReviewRequest,
-    ) -> Result<Review, ApiError>;
-}
-```
-
-## Comment Operations
-
-Pull requests support issue-style comments (separate from review comments).
-
-### List PR Comments
-
-```rust
-impl InstallationClient {
-    /// List all comments on a pull request.
-    ///
-    /// These are issue-style comments, not review comments.
-    /// For review comments, use `list_pull_request_reviews`.
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of comments in chronological order.
-    pub async fn list_pull_request_comments(
-        &self,
-        owner: &str,
-        repo: &str,
-        pull_number: u64,
-    ) -> Result<Vec<Comment>, ApiError>;
-}
-```
-
-### Create PR Comment
-
-```rust
-impl InstallationClient {
-    /// Add a comment to a pull request.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    /// * `body` - Comment body (Markdown supported)
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `Comment`.
-    pub async fn create_pull_request_comment(
-        &self,
-        owner: &str,
-        repo: &str,
-        pull_number: u64,
-        body: &str,
-    ) -> Result<Comment, ApiError>;
-}
-```
-
-## Label Operations
-
-Pull requests use the same label operations as issues.
-
-### Add Labels to PR
-
-```rust
-impl InstallationClient {
-    /// Add labels to a pull request.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    /// * `labels` - Label names to add
-    ///
-    /// # Returns
-    ///
-    /// Returns updated list of PR labels.
-    pub async fn add_labels_to_pull_request(
-        &self,
-        owner: &str,
-        repo: &str,
-        pull_number: u64,
-        labels: &[String],
-    ) -> Result<Vec<Label>, ApiError>;
-}
-```
-
-### Remove Label from PR
-
-```rust
-impl InstallationClient {
-    /// Remove a label from a pull request.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    /// * `label_name` - Label name to remove
-    pub async fn remove_label_from_pull_request(
-        &self,
-        owner: &str,
-        repo: &str,
-        pull_number: u64,
-        label_name: &str,
-    ) -> Result<(), ApiError>;
-}
-```
-
-## Milestone Operations
-
-### Set PR Milestone
-
-```rust
-impl InstallationClient {
-    /// Set the milestone for a pull request.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `pull_number` - Pull request number
-    /// * `milestone_number` - Milestone number (or None to remove)
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `PullRequest`.
-    pub async fn set_pull_request_milestone(
+    /// Pass `None` to remove the milestone from the PR.
+    pub async fn set_milestone(
         &self,
         owner: &str,
         repo: &str,
@@ -441,7 +249,246 @@ impl InstallationClient {
 }
 ```
 
-**Implementation**: Uses `update_pull_request` with milestone field.
+**Implementation**: Delegates to `update()` with the `milestone` field set.
+
+## Review Operations
+
+Review methods use the `list_reviews` / `get_review` / etc. naming style (not prefixed
+with `pull_request_`) because the sub-client context makes the domain clear.
+
+### `list_reviews`
+
+```rust
+impl PullRequestsClient {
+    /// List reviews for a pull request in chronological order.
+    pub async fn list_reviews(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+    ) -> Result<Vec<Review>, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews`
+
+### `get_review`
+
+```rust
+impl PullRequestsClient {
+    /// Get a single review by ID.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — Review doesn't exist on this PR
+    pub async fn get_review(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        review_id: u64,
+    ) -> Result<Review, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}`
+
+### `create_review`
+
+```rust
+impl PullRequestsClient {
+    /// Create a review for a pull request.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::AuthorizationFailed` — Missing `pull_requests: write`
+    /// * `ApiError::InvalidRequest` — Already reviewed (422)
+    pub async fn create_review(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        request: &CreateReviewRequest,
+    ) -> Result<Review, ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews`
+
+### `update_review`
+
+```rust
+impl PullRequestsClient {
+    /// Update the body of an existing pending review.
+    pub async fn update_review(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        review_id: u64,
+        body: &str,
+    ) -> Result<Review, ApiError>;
+}
+```
+
+**Endpoint**: `PUT /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}`
+
+### `dismiss_review`
+
+```rust
+impl PullRequestsClient {
+    /// Dismiss a submitted review.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::AuthorizationFailed` — Only maintainers can dismiss reviews
+    pub async fn dismiss_review(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        review_id: u64,
+        message: &str,
+    ) -> Result<Review, ApiError>;
+}
+```
+
+**Endpoint**: `PUT /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/dismissals`
+
+## Comment Operations
+
+Pull requests support issue-style comments (on the conversation thread), separate from
+review comments (inline code comments attached to a file diff).
+
+### `list_comments`
+
+```rust
+impl PullRequestsClient {
+    /// List all conversation-thread comments on a pull request.
+    ///
+    /// These are issue-body-style comments. For review comments (inline code
+    /// annotations), use `list_reviews`.
+    ///
+    /// Auto-paginates (ADR-002).
+    pub async fn list_comments(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+    ) -> Result<Vec<Comment>, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/issues/{pull_number}/comments?per_page=100`
+
+*Note*: GitHub routes PR conversation comments through the Issues comments endpoint.
+
+### `create_comment`
+
+```rust
+impl PullRequestsClient {
+    /// Add a conversation-thread comment to a pull request.
+    pub async fn create_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        body: &str,
+    ) -> Result<Comment, ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/issues/{pull_number}/comments`
+
+### `update_comment`
+
+```rust
+impl PullRequestsClient {
+    /// Update the body of a conversation-thread comment.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — comment doesn't exist
+    /// * `ApiError::AuthorizationFailed` — not the comment author
+    pub async fn update_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<Comment, ApiError>;
+}
+```
+
+**Endpoint**: `PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}`
+
+### `delete_comment`
+
+```rust
+impl PullRequestsClient {
+    /// Delete a conversation-thread comment.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — comment doesn't exist
+    /// * `ApiError::AuthorizationFailed` — not the comment author
+    pub async fn delete_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}`
+**Success**: 204 No Content
+
+## Label Operations
+
+### `add_labels`
+
+```rust
+impl PullRequestsClient {
+    /// Add labels to a pull request.
+    ///
+    /// Labels must already exist in the repository label catalogue (`LabelsClient`).
+    ///
+    /// # Returns
+    ///
+    /// Returns the updated set of labels on the PR.
+    pub async fn add_labels(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        labels: &[String],
+    ) -> Result<Vec<Label>, ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/issues/{pull_number}/labels`
+
+### `remove_label`
+
+```rust
+impl PullRequestsClient {
+    /// Remove a single label from a pull request.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — label not applied to this PR
+    pub async fn remove_label(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        label_name: &str,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `DELETE /repos/{owner}/{repo}/issues/{pull_number}/labels/{label_name}`
 
 ## Request Types
 

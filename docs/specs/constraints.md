@@ -413,3 +413,125 @@ Error messages MUST include context but NEVER include tokens, keys, or sensitive
 ### Documentation
 
 All public types/methods MUST have complete rustdoc with examples, parameters, errors, and links
+
+---
+
+## Issue Extended Operations Constraints
+
+### Auto-Pagination
+
+- `list_issue_comments()` MUST auto-paginate using `per_page=100` and follow all `Link: rel="next"` headers (ADR-002)
+- All other auto-paginating list methods (reactions, activity events, timeline, milestones, available assignees) MUST follow the same loop pattern
+- Auto-pagination MUST propagate any `ApiError` immediately on a page fetch failure  do not return a partial list
+- Subsequent page URLs MUST be used verbatim from the `Link` header  do not reconstruct URLs manually
+
+### Reactions
+
+- `create_issue_reaction()` and `create_comment_reaction()` MUST treat both HTTP 200 and HTTP 201 responses as `Ok(Reaction)`
+- `ReactionContent::PlusOne` and `ReactionContent::MinusOne` MUST serialize to `"+1"` and `"-1"` respectively (GitHub API names)
+
+### Issue Locking
+
+- `lock_issue()` MUST use HTTP PUT to `/repos/{owner}/{repo}/issues/{number}/lock`
+- `unlock_issue()` MUST use HTTP DELETE to the same path
+- Both methods treat HTTP 204 as success
+- `LockReason` MUST serialize with kebab-case (`off-topic`, `too-heated`, `resolved`, `spam`)
+
+### Assignees
+
+- `remove_assignees_from_issue()` MUST use HTTP DELETE with a JSON body containing `{ "assignees": [...] }`  GitHub requires a body on this DELETE
+- Implementations MUST NOT validate assignee eligibility client-side; GitHub's silent ignore is the authoritative behaviour
+
+### Timeline Deserialization
+
+- `TimelineEvent` MUST deserialize unknown event kinds to a catch-all variant without returning `Err`
+- The implementation MUST NOT `panic!` on unknown timeline event types
+- The catch-all variant MAY discard fields from unknown types (no requirement to preserve raw JSON unless specified later)
+
+### IssueCommentEvent
+
+- `IssueCommentEvent` lives in `src/events/github_events.rs` alongside `IssueEvent` and `PullRequestEvent`
+- `IssueCommentEvent::comment` MUST use the same `Comment` type from `src/client/issue.rs`
+- `IssueCommentEvent::issue` MUST use the same `Issue` type from `src/client/issue.rs`
+
+### Milestone CRUD
+
+- Milestone CRUD methods (`get_milestone`, `list_milestones`, `create_milestone`, `update_milestone`, `delete_milestone`) live in `src/client/issue.rs` alongside the existing `Milestone` type and `set_issue_milestone()`
+- There is NO separate `milestone.rs` file  the note in `additional-operations.md` predates the decision to consolidate in `issue.rs`
+
+---
+
+## Sub-Client API Constraints (ADR-003)
+
+### Sub-Client Construction
+
+- All factory methods on `InstallationClient` MUST be infallible (`&self -> SubClient`, no `Result`)
+- All factory methods MUST be O(1) and make NO API calls during construction
+- Sub-clients MUST be `Clone` and `Debug`
+- Sub-clients MUST NOT hold any mutable state
+
+### Sub-Client Delegation
+
+- All HTTP operations in sub-clients MUST delegate to `InstallationClient`'s internal helpers
+- Sub-clients MUST NOT create their own HTTP clients or manage their own tokens
+- Sub-clients hold a clone of (or a reference to) the parent `InstallationClient` so that
+  token caching and rate limiting remain centralised
+
+### Sub-Client File Placement
+
+| Sub-Client | Source file |
+|---|---|
+| `IssuesClient` | `src/client/issue.rs` |
+| `LabelsClient` | `src/client/issue.rs` |
+| `MilestonesClient` | `src/client/issue.rs` |
+| `PullRequestsClient` | `src/client/pull_request.rs` |
+| `RepositoriesClient` | `src/client/repository.rs` (+ commit.rs for commit methods) |
+| `WorkflowsClient` | `src/client/workflow.rs` |
+| `ReleasesClient` | `src/client/release.rs` |
+| `ProjectsClient` | `src/client/project.rs` |
+
+### Label Responsibility Split
+
+- **Repo-level label catalogue** (create/update/delete label definitions): `LabelsClient`
+- **Applying labels to an issue**: `IssuesClient::add_labels`, `IssuesClient::remove_label`, `IssuesClient::replace_labels`
+- **Applying labels to a PR**: `PullRequestsClient::add_labels`, `PullRequestsClient::remove_label`
+
+### Method Naming on Sub-Clients
+
+- Methods on sub-clients MUST NOT repeat the domain noun in their name because the
+  sub-client already provides domain context
+  - CORRECT: `client.issues().list(...)` / `client.labels().create(...)`
+  - WRONG: `client.issues().list_issues(...)` / `client.labels().create_label(...)`
+- Exception: compound methods where the noun disambiguates the sub-resource are allowed
+  - `client.issues().list_comments(...)`, `client.issues().list_reactions(...)`,
+    `client.pull_requests().list_reviews(...)` — all acceptable because the noun names
+    the resource, not the domain
+
+### Review Method Naming on PullRequestsClient
+
+- Review methods MUST retain the `_review` / `_reviews` suffix to avoid ambiguity
+  with `list_comments` and other comment methods
+  - `list_reviews`, `get_review`, `create_review`, `update_review`, `dismiss_review`
+
+### Pagination Policy (ADR-002)
+
+| Operation | Strategy | Rationale |
+|---|---|---|
+| `issues().list_comments` | Auto-paginated | Must be complete for state reconstruction |
+| `labels().list` | Auto-paginated | Bounded catalogue set |
+| `milestones().list` | Auto-paginated | Bounded set per repo |
+| `issues().list_reactions` / `list_comment_reactions` | Auto-paginated | Bounded per resource |
+| `issues().list_available_assignees` | Auto-paginated | Bounded collaborator set |
+| `issues().list_activity_events` | Auto-paginated | Bounded per issue |
+| `issues().list_timeline` | Auto-paginated | Must be complete for audit |
+| `repositories().list_branches` | Auto-paginated | Bounded per repo |
+| `repositories().list_tags` | Auto-paginated | Bounded per repo |
+| `issues().list` | Manual (`PagedResponse<T>`) | Caller may stop early; unbounded in large repos |
+| `pull_requests().list` | Manual | Unbounded |
+| `repositories().list_commits` | Manual | Arbitrarily large history |
+
+### Backward Compatibility
+
+- The old flat `InstallationClient` methods (`list_issues`, `get_issue_comment`, etc.) MUST be removed
+- There is NO compatibility shim; this is a clean API replacement before the 1.0 release
+- The change is tracked in CHANGELOG.md as a breaking change

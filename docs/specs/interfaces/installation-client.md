@@ -316,3 +316,88 @@ After implementing this foundation, add domain-specific operations:
 - [architecture.md](../architecture.md) - Architecture boundaries and dependencies
 - [app-level-authentication.md](../architecture/app-level-authentication.md) - Authentication patterns
 - [assertions.md](../assertions.md) - Behavioral requirements
+
+---
+
+## Domain Sub-Client Factory Methods
+
+See **ADR-003** for the architectural rationale.
+
+`InstallationClient` exposes synchronous factory methods that return lightweight
+domain-scoped clients. Each factory method is infallible, makes no API call, and is
+O(1) in cost (at most an `Arc` increment).
+
+```rust
+impl InstallationClient {
+    /// Access issue-domain operations.
+    ///
+    /// Returns a client scoped to issue, comment, reaction, label-application,
+    /// assignee, lock, and timeline operations on issues.
+    ///
+    /// See docs/specs/interfaces/issue-operations.md
+    pub fn issues(&self) -> IssuesClient;
+
+    /// Access pull request operations, reviews, and inline comments.
+    ///
+    /// See docs/specs/interfaces/pull-request-operations.md
+    pub fn pull_requests(&self) -> PullRequestsClient;
+
+    /// Access repository-level label catalogue operations.
+    ///
+    /// For applying labels to issues or PRs, use the respective sub-client.
+    ///
+    /// See docs/specs/interfaces/labels-client.md
+    pub fn labels(&self) -> LabelsClient;
+
+    /// Access milestone CRUD operations.
+    ///
+    /// See docs/specs/interfaces/milestones-client.md
+    pub fn milestones(&self) -> MilestonesClient;
+
+    /// Access repository info, branch, tag, git‑ref, and commit operations.
+    ///
+    /// See docs/specs/interfaces/repository-operations.md
+    pub fn repositories(&self) -> RepositoriesClient;
+
+    /// Access GitHub Actions workflow and run operations.
+    ///
+    /// See docs/specs/interfaces/additional-operations.md
+    pub fn workflows(&self) -> WorkflowsClient;
+
+    /// Access release CRUD operations.
+    ///
+    /// See docs/specs/interfaces/additional-operations.md
+    pub fn releases(&self) -> ReleasesClient;
+
+    /// Access GitHub Projects V2 operations.
+    ///
+    /// See docs/specs/interfaces/project-operations.md
+    pub fn projects(&self) -> ProjectsClient;
+}
+```
+
+### Sub-Client Construction Constraints
+
+- Factory methods are `&self` (no exclusive ownership required).
+- Sub-clients MUST be `Clone` and `Debug`.
+- Sub-clients MUST NOT hold any mutable state.
+- Sub-clients delegate all HTTP calls back through the parent `InstallationClient`'s
+  generic `get`, `post`, `patch`, `put`, `delete` methods (or equivalent internal helpers).
+- Sub-clients MUST NOT make API calls during construction.
+
+### Example Usage
+
+```rust
+// Operations are grouped by domain:
+let issues = client.issues();
+let comments = issues.list_comments("owner", "repo", 42).await?;
+let reaction  = issues.create_reaction("owner", "repo", 42, ReactionContent::Eyes).await?;
+
+// Labels — two separate concerns:
+let label_def = client.labels().get("owner", "repo", "bug").await?;
+let updated   = client.issues().add_labels("owner", "repo", 42, vec!["bug".into()]).await?;
+
+// Milestone lifecycle:
+let ms  = client.milestones().create("owner", "repo", req).await?;
+let _   = client.issues().set_milestone("owner", "repo", 42, Some(ms.number)).await?;
+```

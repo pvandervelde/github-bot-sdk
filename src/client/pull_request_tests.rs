@@ -248,7 +248,8 @@ mod pull_request_operations {
             .unwrap();
 
         let response = client
-            .list_pull_requests("owner", "repo", None, None)
+            .pull_requests()
+            .list("owner", "repo", None, None)
             .await
             .unwrap();
 
@@ -325,7 +326,11 @@ mod pull_request_operations {
             .await
             .unwrap();
 
-        let pr = client.get_pull_request("owner", "repo", 42).await.unwrap();
+        let pr = client
+            .pull_requests()
+            .get("owner", "repo", 42)
+            .await
+            .unwrap();
 
         assert_eq!(pr.number, 42);
         assert_eq!(pr.title, "Test PR");
@@ -354,7 +359,7 @@ mod pull_request_operations {
             .await
             .unwrap();
 
-        let result = client.get_pull_request("owner", "repo", 999).await;
+        let result = client.pull_requests().get("owner", "repo", 999).await;
 
         assert!(matches!(result, Err(ApiError::NotFound)));
     }
@@ -437,7 +442,8 @@ mod pull_request_operations {
         };
 
         let pr = client
-            .create_pull_request("owner", "repo", request)
+            .pull_requests()
+            .create("owner", "repo", request)
             .await
             .unwrap();
 

@@ -393,7 +393,8 @@ mod get_issue_linked_projects_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .get_issue_linked_projects("octocat", "Hello-World", 42)
+            .projects()
+            .list_for_issue("octocat", "Hello-World", 42)
             .await;
 
         assert!(result.is_ok(), "expected Ok, got {:?}", result);
@@ -433,7 +434,8 @@ mod get_issue_linked_projects_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .get_issue_linked_projects("octocat", "Hello-World", 1)
+            .projects()
+            .list_for_issue("octocat", "Hello-World", 1)
             .await;
 
         assert!(result.is_ok(), "expected Ok, got {:?}", result);
@@ -457,7 +459,8 @@ mod get_issue_linked_projects_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .get_issue_linked_projects("owner", "missing-repo", 1)
+            .projects()
+            .list_for_issue("owner", "missing-repo", 1)
             .await;
 
         assert!(result.is_err());
@@ -482,7 +485,7 @@ mod get_issue_linked_projects_tests {
             .await;
 
         let client = make_client(&mock_server, "bad-token").await;
-        let result = client.get_issue_linked_projects("owner", "repo", 1).await;
+        let result = client.projects().list_for_issue("owner", "repo", 1).await;
 
         assert!(result.is_err());
         assert!(matches!(
@@ -519,7 +522,8 @@ mod get_issue_linked_projects_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .get_issue_linked_projects("octocat", "Hello-World", 42)
+            .projects()
+            .list_for_issue("octocat", "Hello-World", 42)
             .await;
 
         assert!(result.is_ok(), "expected Ok, got {:?}", result);
@@ -549,7 +553,8 @@ mod get_issue_linked_projects_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .get_issue_linked_projects("octocat", "Hello-World", 9999)
+            .projects()
+            .list_for_issue("octocat", "Hello-World", 9999)
             .await;
 
         assert!(result.is_err());
@@ -689,7 +694,8 @@ mod add_item_to_project_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .projects()
+            .add_item("octocat", 1, "I_kwDOAE1L0M5abc123")
             .await;
 
         assert!(result.is_ok(), "expected Ok, got {:?}", result);
@@ -739,7 +745,8 @@ mod add_item_to_project_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .projects()
+            .add_item("octocat", 1, "I_kwDOAE1L0M5abc123")
             .await;
 
         assert!(
@@ -777,7 +784,8 @@ mod add_item_to_project_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .add_item_to_project("unknown-owner", 99, "I_kwDOAE1L0M5abc123")
+            .projects()
+            .add_item("unknown-owner", 99, "I_kwDOAE1L0M5abc123")
             .await;
 
         assert!(result.is_err());
@@ -821,7 +829,8 @@ mod add_item_to_project_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .projects()
+            .add_item("octocat", 1, "I_kwDOAE1L0M5abc123")
             .await;
 
         assert!(result.is_err());
@@ -844,7 +853,8 @@ mod add_item_to_project_tests {
 
         let client = make_client(&mock_server, "bad-token").await;
         let result = client
-            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .projects()
+            .add_item("octocat", 1, "I_kwDOAE1L0M5abc123")
             .await;
 
         assert!(result.is_err());
@@ -894,7 +904,8 @@ mod add_item_to_project_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .projects()
+            .add_item("octocat", 1, "I_kwDOAE1L0M5abc123")
             .await;
 
         assert!(result.is_err());
@@ -943,7 +954,8 @@ mod add_item_to_project_tests {
 
         let client = make_client(&mock_server, token).await;
         let result = client
-            .add_item_to_project("octocat", 1, "I_kwDOAE1L0M5abc123")
+            .projects()
+            .add_item("octocat", 1, "I_kwDOAE1L0M5abc123")
             .await;
 
         assert!(result.is_err());

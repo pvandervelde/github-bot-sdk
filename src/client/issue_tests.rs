@@ -143,7 +143,8 @@ mod issue_operations {
             .unwrap();
 
         let result = client
-            .list_issues("octocat", "Hello-World", None, None)
+            .issues()
+            .list("octocat", "Hello-World", None, None)
             .await;
 
         assert!(result.is_ok());
@@ -180,7 +181,8 @@ mod issue_operations {
             .unwrap();
 
         let result = client
-            .list_issues("octocat", "Hello-World", Some("open"), None)
+            .issues()
+            .list("octocat", "Hello-World", Some("open"), None)
             .await;
 
         assert!(result.is_ok());
@@ -234,7 +236,7 @@ mod issue_operations {
             .await
             .unwrap();
 
-        let result = client.get_issue("octocat", "Hello-World", 1347).await;
+        let result = client.issues().get("octocat", "Hello-World", 1347).await;
 
         assert!(result.is_ok());
         let issue = result.unwrap();
@@ -267,7 +269,7 @@ mod issue_operations {
             .await
             .unwrap();
 
-        let result = client.get_issue("octocat", "Hello-World", 9999).await;
+        let result = client.issues().get("octocat", "Hello-World", 9999).await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::NotFound));
@@ -329,7 +331,10 @@ mod issue_operations {
             labels: None,
         };
 
-        let result = client.create_issue("octocat", "Hello-World", request).await;
+        let result = client
+            .issues()
+            .create("octocat", "Hello-World", request)
+            .await;
 
         assert!(result.is_ok());
         let issue = result.unwrap();
@@ -403,7 +408,10 @@ mod issue_operations {
             labels: Some(vec!["bug".to_string()]),
         };
 
-        let result = client.create_issue("octocat", "Hello-World", request).await;
+        let result = client
+            .issues()
+            .create("octocat", "Hello-World", request)
+            .await;
 
         assert!(result.is_ok());
         let issue = result.unwrap();
@@ -468,7 +476,8 @@ mod issue_operations {
         };
 
         let result = client
-            .update_issue("octocat", "Hello-World", 1347, request)
+            .issues()
+            .update("octocat", "Hello-World", 1347, request)
             .await;
 
         assert!(result.is_ok());
@@ -539,7 +548,8 @@ mod issue_operations {
             .unwrap();
 
         let result = client
-            .set_issue_milestone("octocat", "Hello-World", 1347, Some(1))
+            .issues()
+            .set_milestone("octocat", "Hello-World", 1347, Some(1))
             .await;
 
         assert!(result.is_ok());
@@ -597,7 +607,8 @@ mod issue_operations {
             .unwrap();
 
         let result = client
-            .set_issue_milestone("octocat", "Hello-World", 1347, None)
+            .issues()
+            .set_milestone("octocat", "Hello-World", 1347, None)
             .await;
 
         assert!(result.is_ok());
@@ -654,7 +665,7 @@ mod label_operations {
             .await
             .unwrap();
 
-        let result = client.list_labels("octocat", "Hello-World").await;
+        let result = client.labels().list("octocat", "Hello-World").await;
 
         assert!(result.is_ok());
         let labels = result.unwrap();
@@ -697,7 +708,7 @@ mod label_operations {
             .await
             .unwrap();
 
-        let result = client.get_label("octocat", "Hello-World", "bug").await;
+        let result = client.labels().get("octocat", "Hello-World", "bug").await;
 
         assert!(result.is_ok());
         let label = result.unwrap();
@@ -731,7 +742,8 @@ mod label_operations {
             .unwrap();
 
         let result = client
-            .get_label("octocat", "Hello-World", "nonexistent")
+            .labels()
+            .get("octocat", "Hello-World", "nonexistent")
             .await;
 
         assert!(result.is_err());
@@ -778,7 +790,10 @@ mod label_operations {
             color: "ff0000".to_string(),
         };
 
-        let result = client.create_label("octocat", "Hello-World", request).await;
+        let result = client
+            .labels()
+            .create("octocat", "Hello-World", request)
+            .await;
 
         assert!(result.is_ok());
         let label = result.unwrap();
@@ -827,7 +842,8 @@ mod label_operations {
         };
 
         let result = client
-            .update_label("octocat", "Hello-World", "bug", request)
+            .labels()
+            .update("octocat", "Hello-World", "bug", request)
             .await;
 
         assert!(result.is_ok());
@@ -862,7 +878,8 @@ mod label_operations {
             .unwrap();
 
         let result = client
-            .delete_label("octocat", "Hello-World", "deprecated")
+            .labels()
+            .delete("octocat", "Hello-World", "deprecated")
             .await;
 
         assert!(result.is_ok());
@@ -915,7 +932,8 @@ mod label_operations {
         let labels = vec!["bug".to_string(), "high-priority".to_string()];
 
         let result = client
-            .add_labels_to_issue("octocat", "Hello-World", 1347, labels)
+            .issues()
+            .add_labels("octocat", "Hello-World", 1347, labels)
             .await;
 
         assert!(result.is_ok());
@@ -964,7 +982,8 @@ mod label_operations {
             .unwrap();
 
         let result = client
-            .remove_label_from_issue("octocat", "Hello-World", 1347, "high-priority")
+            .issues()
+            .remove_label("octocat", "Hello-World", 1347, "high-priority")
             .await;
 
         assert!(result.is_ok());
@@ -1035,7 +1054,8 @@ mod comment_operations {
             .unwrap();
 
         let result = client
-            .list_issue_comments("octocat", "Hello-World", 1347)
+            .issues()
+            .list_comments("octocat", "Hello-World", 1347)
             .await;
 
         assert!(result.is_ok());
@@ -1086,7 +1106,10 @@ mod comment_operations {
             .await
             .unwrap();
 
-        let result = client.get_issue_comment("octocat", "Hello-World", 1).await;
+        let result = client
+            .issues()
+            .get_comment("octocat", "Hello-World", 1)
+            .await;
 
         assert!(result.is_ok());
         let comment = result.unwrap();
@@ -1120,7 +1143,8 @@ mod comment_operations {
             .unwrap();
 
         let result = client
-            .get_issue_comment("octocat", "Hello-World", 9999)
+            .issues()
+            .get_comment("octocat", "Hello-World", 9999)
             .await;
 
         assert!(result.is_err());
@@ -1172,7 +1196,8 @@ mod comment_operations {
         };
 
         let result = client
-            .create_issue_comment("octocat", "Hello-World", 1347, request)
+            .issues()
+            .create_comment("octocat", "Hello-World", 1347, request)
             .await;
 
         assert!(result.is_ok());
@@ -1226,7 +1251,8 @@ mod comment_operations {
         };
 
         let result = client
-            .update_issue_comment("octocat", "Hello-World", 1, request)
+            .issues()
+            .update_comment("octocat", "Hello-World", 1, request)
             .await;
 
         assert!(result.is_ok());
@@ -1260,7 +1286,8 @@ mod comment_operations {
             .unwrap();
 
         let result = client
-            .delete_issue_comment("octocat", "Hello-World", 1)
+            .issues()
+            .delete_comment("octocat", "Hello-World", 1)
             .await;
 
         assert!(result.is_ok());
@@ -1443,7 +1470,7 @@ mod serialization {
             milestone.description,
             Some("Tracking milestone for version 1.0".to_string())
         );
-        assert_eq!(milestone.state, "open");
+        assert!(matches!(milestone.state, MilestoneState::Open));
         assert_eq!(milestone.open_issues, 4);
         assert_eq!(milestone.closed_issues, 8);
         assert!(milestone.due_on.is_some());
@@ -1523,7 +1550,7 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_issue("owner", "repo", 999).await;
+        let result = client.issues().get("owner", "repo", 999).await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::NotFound));
@@ -1555,7 +1582,7 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_issue("owner", "private-repo", 1).await;
+        let result = client.issues().get("owner", "private-repo", 1).await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::AuthorizationFailed));
@@ -1602,7 +1629,7 @@ mod error_handling {
             labels: None,
         };
 
-        let result = client.create_issue("owner", "repo", request).await;
+        let result = client.issues().create("owner", "repo", request).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();

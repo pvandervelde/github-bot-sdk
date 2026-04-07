@@ -1,4 +1,5 @@
-// Release and release asset operations for GitHub API
+// Spec: docs/specs/interfaces/additional-operations.md
+// Release operations for GitHub API
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -178,10 +179,20 @@ pub struct UpdateReleaseRequest {
     pub prerelease: Option<bool>,
 }
 
-impl InstallationClient {
-    // ========================================================================
-    // Release Operations
-    // ========================================================================
+/// Domain client for release operations.
+///
+/// Obtained via [`InstallationClient::releases()`]. Cheap to clone (Arc-backed).
+///
+/// See docs/specs/interfaces/additional-operations.md
+#[derive(Debug, Clone)]
+pub struct ReleasesClient {
+    client: InstallationClient,
+}
+
+impl ReleasesClient {
+    pub(crate) fn new(client: InstallationClient) -> Self {
+        Self { client }
+    }
 
     /// List releases in a repository.
     ///
@@ -213,9 +224,9 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_releases(&self, owner: &str, repo: &str) -> Result<Vec<Release>, ApiError> {
+    pub async fn list(&self, owner: &str, repo: &str) -> Result<Vec<Release>, ApiError> {
         let path = format!("/repos/{}/{}/releases", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -267,9 +278,9 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_latest_release(&self, owner: &str, repo: &str) -> Result<Release, ApiError> {
+    pub async fn get_latest(&self, owner: &str, repo: &str) -> Result<Release, ApiError> {
         let path = format!("/repos/{}/{}/releases/latest", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -322,7 +333,7 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_release_by_tag(
+    pub async fn get_by_tag(
         &self,
         owner: &str,
         repo: &str,
@@ -330,7 +341,7 @@ impl InstallationClient {
     ) -> Result<Release, ApiError> {
         let encoded_tag = urlencoding::encode(tag);
         let path = format!("/repos/{}/{}/releases/tags/{}", owner, repo, encoded_tag);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -383,14 +394,9 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_release(
-        &self,
-        owner: &str,
-        repo: &str,
-        release_id: u64,
-    ) -> Result<Release, ApiError> {
+    pub async fn get(&self, owner: &str, repo: &str, release_id: u64) -> Result<Release, ApiError> {
         let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -453,14 +459,14 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn create_release(
+    pub async fn create(
         &self,
         owner: &str,
         repo: &str,
         request: CreateReleaseRequest,
     ) -> Result<Release, ApiError> {
         let path = format!("/repos/{}/{}/releases", owner, repo);
-        let response = self.post(&path, &request).await?;
+        let response = self.client.post(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -527,7 +533,7 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn update_release(
+    pub async fn update(
         &self,
         owner: &str,
         repo: &str,
@@ -535,7 +541,7 @@ impl InstallationClient {
         request: UpdateReleaseRequest,
     ) -> Result<Release, ApiError> {
         let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
-        let response = self.patch(&path, &request).await?;
+        let response = self.client.patch(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -595,14 +601,9 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_release(
-        &self,
-        owner: &str,
-        repo: &str,
-        release_id: u64,
-    ) -> Result<(), ApiError> {
+    pub async fn delete(&self, owner: &str, repo: &str, release_id: u64) -> Result<(), ApiError> {
         let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
-        let response = self.delete(&path).await?;
+        let response = self.client.delete(&path).await?;
 
         let status = response.status();
         if !status.is_success() {

@@ -219,7 +219,7 @@ mod release_operations {
             .await
             .unwrap();
 
-        let result = client.list_releases("octocat", "Hello-World").await;
+        let result = client.releases().list("octocat", "Hello-World").await;
 
         assert!(result.is_ok());
         let releases = result.unwrap();
@@ -278,7 +278,7 @@ mod release_operations {
             .await
             .unwrap();
 
-        let result = client.get_latest_release("octocat", "Hello-World").await;
+        let result = client.releases().get_latest("octocat", "Hello-World").await;
 
         assert!(result.is_ok());
         let release = result.unwrap();
@@ -317,7 +317,7 @@ mod release_operations {
             .await
             .unwrap();
 
-        let result = client.get_latest_release("octocat", "Hello-World").await;
+        let result = client.releases().get_latest("octocat", "Hello-World").await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::NotFound));
@@ -374,7 +374,8 @@ mod release_operations {
             .unwrap();
 
         let result = client
-            .get_release_by_tag("octocat", "Hello-World", "v1.0.0")
+            .releases()
+            .get_by_tag("octocat", "Hello-World", "v1.0.0")
             .await;
 
         assert!(result.is_ok());
@@ -437,7 +438,8 @@ mod release_operations {
             .unwrap();
 
         let result = client
-            .get_release_by_tag("octocat", "Hello-World", "release/v1.0")
+            .releases()
+            .get_by_tag("octocat", "Hello-World", "release/v1.0")
             .await;
 
         assert!(result.is_ok());
@@ -496,7 +498,7 @@ mod release_operations {
             .await
             .unwrap();
 
-        let result = client.get_release("octocat", "Hello-World", 12345).await;
+        let result = client.releases().get("octocat", "Hello-World", 12345).await;
 
         assert!(result.is_ok());
         let release = result.unwrap();
@@ -571,7 +573,8 @@ mod release_operations {
         };
 
         let result = client
-            .create_release("octocat", "Hello-World", request)
+            .releases()
+            .create("octocat", "Hello-World", request)
             .await;
 
         assert!(result.is_ok());
@@ -640,7 +643,8 @@ mod release_operations {
         };
 
         let result = client
-            .create_release("octocat", "Hello-World", request)
+            .releases()
+            .create("octocat", "Hello-World", request)
             .await;
 
         assert!(result.is_ok());
@@ -709,7 +713,8 @@ mod release_operations {
         };
 
         let result = client
-            .create_release("octocat", "Hello-World", request)
+            .releases()
+            .create("octocat", "Hello-World", request)
             .await;
 
         assert!(result.is_ok());
@@ -777,7 +782,8 @@ mod release_operations {
         };
 
         let result = client
-            .update_release("octocat", "Hello-World", 1, request)
+            .releases()
+            .update("octocat", "Hello-World", 1, request)
             .await;
 
         assert!(result.is_ok());
@@ -817,7 +823,7 @@ mod release_operations {
             .await
             .unwrap();
 
-        let result = client.delete_release("octocat", "Hello-World", 1).await;
+        let result = client.releases().delete("octocat", "Hello-World", 1).await;
 
         assert!(result.is_ok());
     }
@@ -1028,7 +1034,10 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_release("octocat", "Hello-World", 999999).await;
+        let result = client
+            .releases()
+            .get("octocat", "Hello-World", 999999)
+            .await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::NotFound));
@@ -1082,7 +1091,8 @@ mod error_handling {
         };
 
         let result = client
-            .create_release("octocat", "Hello-World", request)
+            .releases()
+            .create("octocat", "Hello-World", request)
             .await;
 
         assert!(result.is_err());
@@ -1126,7 +1136,8 @@ mod error_handling {
             .unwrap();
 
         let result = client
-            .delete_release("private-org", "private-repo", 1)
+            .releases()
+            .delete("private-org", "private-repo", 1)
             .await;
 
         assert!(result.is_err());
@@ -1163,7 +1174,7 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_release("octocat", "Hello-World", 12345).await;
+        let result = client.releases().get("octocat", "Hello-World", 12345).await;
 
         assert!(result.is_err());
         assert!(matches!(
@@ -1199,7 +1210,7 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_release("octocat", "Hello-World", 12345).await;
+        let result = client.releases().get("octocat", "Hello-World", 12345).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {

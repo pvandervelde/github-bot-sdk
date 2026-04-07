@@ -116,7 +116,7 @@ mod workflow_operations {
             .await
             .unwrap();
 
-        let result = client.list_workflows("octocat", "Hello-World").await;
+        let result = client.workflows().list("octocat", "Hello-World").await;
 
         assert!(result.is_ok());
         let workflows = result.unwrap();
@@ -169,7 +169,10 @@ mod workflow_operations {
             .await
             .unwrap();
 
-        let result = client.get_workflow("octocat", "Hello-World", 161335).await;
+        let result = client
+            .workflows()
+            .get("octocat", "Hello-World", 161335)
+            .await;
 
         assert!(result.is_ok());
         let workflow = result.unwrap();
@@ -208,7 +211,10 @@ mod workflow_operations {
             .await
             .unwrap();
 
-        let result = client.get_workflow("octocat", "Hello-World", 999999).await;
+        let result = client
+            .workflows()
+            .get("octocat", "Hello-World", 999999)
+            .await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::NotFound));
@@ -250,7 +256,8 @@ mod workflow_operations {
         };
 
         let result = client
-            .trigger_workflow("octocat", "Hello-World", 161335, request)
+            .workflows()
+            .trigger("octocat", "Hello-World", 161335, request)
             .await;
 
         assert!(result.is_ok());
@@ -301,7 +308,8 @@ mod workflow_operations {
         };
 
         let result = client
-            .trigger_workflow("octocat", "Hello-World", 161335, request)
+            .workflows()
+            .trigger("octocat", "Hello-World", 161335, request)
             .await;
 
         assert!(result.is_ok());
@@ -364,7 +372,8 @@ mod workflow_run_operations {
             .unwrap();
 
         let result = client
-            .list_workflow_runs("octocat", "Hello-World", 161335)
+            .workflows()
+            .list_runs("octocat", "Hello-World", 161335)
             .await;
 
         assert!(result.is_ok());
@@ -422,7 +431,8 @@ mod workflow_run_operations {
             .unwrap();
 
         let result = client
-            .get_workflow_run("octocat", "Hello-World", 30433642)
+            .workflows()
+            .get_run("octocat", "Hello-World", 30433642)
             .await;
 
         assert!(result.is_ok());
@@ -466,7 +476,8 @@ mod workflow_run_operations {
             .unwrap();
 
         let result = client
-            .cancel_workflow_run("octocat", "Hello-World", 30433642)
+            .workflows()
+            .cancel_run("octocat", "Hello-World", 30433642)
             .await;
 
         assert!(result.is_ok());
@@ -503,7 +514,8 @@ mod workflow_run_operations {
             .unwrap();
 
         let result = client
-            .rerun_workflow_run("octocat", "Hello-World", 30433642)
+            .workflows()
+            .rerun_run("octocat", "Hello-World", 30433642)
             .await;
 
         assert!(result.is_ok());
@@ -673,7 +685,10 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_workflow("octocat", "Hello-World", 999999).await;
+        let result = client
+            .workflows()
+            .get("octocat", "Hello-World", 999999)
+            .await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::NotFound));
@@ -719,7 +734,8 @@ mod error_handling {
         };
 
         let result = client
-            .trigger_workflow("private-org", "private-repo", 123, request)
+            .workflows()
+            .trigger("private-org", "private-repo", 123, request)
             .await;
 
         assert!(result.is_err());
@@ -766,7 +782,8 @@ mod error_handling {
         };
 
         let result = client
-            .trigger_workflow("octocat", "Hello-World", 123, request)
+            .workflows()
+            .trigger("octocat", "Hello-World", 123, request)
             .await;
 
         assert!(result.is_err());
@@ -808,7 +825,10 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_workflow("octocat", "Hello-World", 161335).await;
+        let result = client
+            .workflows()
+            .get("octocat", "Hello-World", 161335)
+            .await;
 
         assert!(result.is_err());
         assert!(matches!(
@@ -844,7 +864,10 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_workflow("octocat", "Hello-World", 161335).await;
+        let result = client
+            .workflows()
+            .get("octocat", "Hello-World", 161335)
+            .await;
 
         assert!(result.is_err());
         match result.unwrap_err() {

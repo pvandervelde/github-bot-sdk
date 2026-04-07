@@ -1,4 +1,4 @@
-// GENERATED FROM: docs/spec/interfaces/project-operations.md
+// Spec: docs/specs/interfaces/project-operations.md
 // GitHub Projects v2 operations
 
 use chrono::{DateTime, Utc};
@@ -230,33 +230,43 @@ mutation AddProjectV2Item($projectId: ID!, $contentId: ID!) {
 }
 "#;
 
-impl InstallationClient {
+/// Domain client for GitHub Projects V2 operations.
+///
+/// Obtained via [`InstallationClient::projects()`]. Cheap to clone (Arc-backed).
+///
+/// See docs/specs/interfaces/project-operations.md
+#[derive(Debug, Clone)]
+pub struct ProjectsClient {
+    pub(crate) client: InstallationClient,
+}
+
+impl ProjectsClient {
+    pub(crate) fn new(client: InstallationClient) -> Self {
+        Self { client }
+    }
+
     // ========================================================================
     // Project Operations
     // ========================================================================
 
     /// List all Projects v2 for an organisation.
     ///
-    /// See docs/spec/interfaces/project-operations.md
-    pub async fn list_organization_projects(&self, _org: &str) -> Result<Vec<ProjectV2>, ApiError> {
-        unimplemented!("See docs/spec/interfaces/project-operations.md")
+    /// See docs/specs/interfaces/project-operations.md
+    pub async fn list_for_org(&self, _org: &str) -> Result<Vec<ProjectV2>, ApiError> {
+        unimplemented!("See docs/specs/interfaces/project-operations.md")
     }
 
     /// List all Projects v2 for a user.
     ///
-    /// See docs/spec/interfaces/project-operations.md
-    pub async fn list_user_projects(&self, _username: &str) -> Result<Vec<ProjectV2>, ApiError> {
-        unimplemented!("See docs/spec/interfaces/project-operations.md")
+    /// See docs/specs/interfaces/project-operations.md
+    pub async fn list_for_user(&self, _username: &str) -> Result<Vec<ProjectV2>, ApiError> {
+        unimplemented!("See docs/specs/interfaces/project-operations.md")
     }
 
     /// Get details about a specific project.
     ///
     /// See docs/spec/interfaces/project-operations.md
-    pub async fn get_project(
-        &self,
-        _owner: &str,
-        _project_number: u64,
-    ) -> Result<ProjectV2, ApiError> {
+    pub async fn get(&self, _owner: &str, _project_number: u64) -> Result<ProjectV2, ApiError> {
         unimplemented!("See docs/spec/interfaces/project-operations.md")
     }
 
@@ -278,7 +288,7 @@ impl InstallationClient {
     /// - `Err(ApiError::NotFound)` — project not found for this owner
     /// - `Err(ApiError::AuthorizationFailed)` — no write access to the project
     /// - `Err(ApiError)` — other transport or GraphQL errors
-    pub async fn add_item_to_project(
+    pub async fn add_item(
         &self,
         owner: &str,
         project_number: u64,
@@ -292,6 +302,7 @@ impl InstallationClient {
         });
 
         let data = self
+            .client
             .post_graphql(ADD_PROJECT_ITEM_MUTATION, variables)
             .await?;
 
@@ -380,6 +391,7 @@ impl InstallationClient {
 
         // Try organisation first.
         match self
+            .client
             .post_graphql(GET_PROJECT_NODE_ID_ORG_QUERY, variables.clone())
             .await
         {
@@ -402,6 +414,7 @@ impl InstallationClient {
 
         // Fall back to user lookup.
         let data = self
+            .client
             .post_graphql(GET_PROJECT_NODE_ID_USER_QUERY, variables)
             .await?;
 
@@ -432,7 +445,7 @@ impl InstallationClient {
     /// - `Err(ApiError::NotFound)` — repository or issue does not exist
     /// - `Err(ApiError::AuthenticationFailed)` — token is invalid
     /// - `Err(ApiError)` — other transport or GraphQL errors
-    pub async fn get_issue_linked_projects(
+    pub async fn list_for_issue(
         &self,
         owner: &str,
         repo: &str,
@@ -452,6 +465,7 @@ impl InstallationClient {
             });
 
             let data = self
+                .client
                 .post_graphql(GET_ISSUE_LINKED_PROJECTS_QUERY, variables)
                 .await?;
 
@@ -496,7 +510,7 @@ impl InstallationClient {
     /// Remove an item from a project.
     ///
     /// See docs/spec/interfaces/project-operations.md
-    pub async fn remove_item_from_project(
+    pub async fn remove_item(
         &self,
         _owner: &str,
         _project_number: u64,

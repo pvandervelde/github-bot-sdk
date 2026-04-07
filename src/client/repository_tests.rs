@@ -64,7 +64,7 @@ mod repository_operations_tests {
             .await
             .unwrap();
 
-        let result = client.get_repository("octocat", "Hello-World").await;
+        let result = client.repositories().get("octocat", "Hello-World").await;
 
         assert!(result.is_ok());
         let repo = result.unwrap();
@@ -105,7 +105,7 @@ mod repository_operations_tests {
             .await
             .unwrap();
 
-        let result = client.get_repository("octocat", "NonExistent").await;
+        let result = client.repositories().get("octocat", "NonExistent").await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -142,7 +142,10 @@ mod repository_operations_tests {
             .await
             .unwrap();
 
-        let result = client.get_repository("private-org", "secret-repo").await;
+        let result = client
+            .repositories()
+            .get("private-org", "secret-repo")
+            .await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -200,7 +203,10 @@ mod branch_operations_tests {
             .await
             .unwrap();
 
-        let result = client.list_branches("octocat", "Hello-World").await;
+        let result = client
+            .repositories()
+            .list_branches("octocat", "Hello-World")
+            .await;
 
         assert!(result.is_ok());
         let branches = result.unwrap();
@@ -248,7 +254,10 @@ mod branch_operations_tests {
             .await
             .unwrap();
 
-        let result = client.get_branch("octocat", "Hello-World", "main").await;
+        let result = client
+            .repositories()
+            .get_branch("octocat", "Hello-World", "main")
+            .await;
 
         assert!(result.is_ok());
         let branch = result.unwrap();
@@ -289,6 +298,7 @@ mod branch_operations_tests {
             .unwrap();
 
         let result = client
+            .repositories()
             .get_branch("octocat", "Hello-World", "nonexistent")
             .await;
 
@@ -340,7 +350,8 @@ mod git_ref_operations_tests {
             .unwrap();
 
         let result = client
-            .get_git_ref("octocat", "Hello-World", "heads/feature-a")
+            .repositories()
+            .get_ref("octocat", "Hello-World", "heads/feature-a")
             .await;
 
         assert!(result.is_ok());
@@ -391,7 +402,8 @@ mod git_ref_operations_tests {
             .unwrap();
 
         let result = client
-            .create_git_ref(
+            .repositories()
+            .create_ref(
                 "octocat",
                 "Hello-World",
                 "refs/heads/new-feature",
@@ -433,7 +445,8 @@ mod git_ref_operations_tests {
             .unwrap();
 
         let result = client
-            .create_git_ref(
+            .repositories()
+            .create_ref(
                 "octocat",
                 "Hello-World",
                 "refs/heads/main",
@@ -485,7 +498,8 @@ mod git_ref_operations_tests {
             .unwrap();
 
         let result = client
-            .update_git_ref(
+            .repositories()
+            .update_ref(
                 "octocat",
                 "Hello-World",
                 "heads/feature-a",
@@ -540,7 +554,8 @@ mod git_ref_operations_tests {
             .unwrap();
 
         let result = client
-            .update_git_ref(
+            .repositories()
+            .update_ref(
                 "octocat",
                 "Hello-World",
                 "heads/feature-a",
@@ -585,7 +600,8 @@ mod git_ref_operations_tests {
             .unwrap();
 
         let result = client
-            .delete_git_ref("octocat", "Hello-World", "heads/feature-a")
+            .repositories()
+            .delete_ref("octocat", "Hello-World", "heads/feature-a")
             .await;
 
         assert!(result.is_ok());
@@ -622,7 +638,8 @@ mod git_ref_operations_tests {
             .unwrap();
 
         let result = client
-            .delete_git_ref("octocat", "Hello-World", "heads/nonexistent")
+            .repositories()
+            .delete_ref("octocat", "Hello-World", "heads/nonexistent")
             .await;
 
         assert!(result.is_err());
@@ -683,7 +700,10 @@ mod tag_operations_tests {
             .await
             .unwrap();
 
-        let result = client.list_tags("octocat", "Hello-World").await;
+        let result = client
+            .repositories()
+            .list_tags("octocat", "Hello-World")
+            .await;
 
         assert!(result.is_ok());
         let tags = result.unwrap();
@@ -723,7 +743,10 @@ mod tag_operations_tests {
             .await
             .unwrap();
 
-        let result = client.list_tags("octocat", "Empty-Repo").await;
+        let result = client
+            .repositories()
+            .list_tags("octocat", "Empty-Repo")
+            .await;
 
         assert!(result.is_ok());
         let tags = result.unwrap();

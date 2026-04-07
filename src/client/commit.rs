@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::client::issue::IssueUser;
-use crate::client::InstallationClient;
+use crate::client::repository::RepositoriesClient;
 use crate::error::ApiError;
 
 // ============================================================================
@@ -339,7 +339,7 @@ pub struct FileChange {
 // Operations
 // ============================================================================
 
-impl InstallationClient {
+impl RepositoriesClient {
     // ------------------------------------------------------------------------
     // Commit Operations
     // ------------------------------------------------------------------------
@@ -404,7 +404,7 @@ impl InstallationClient {
             repo,
             urlencoding::encode(ref_name)
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
         response.json().await.map_err(ApiError::from)
     }
 
@@ -527,7 +527,7 @@ impl InstallationClient {
             format!("{}?{}", base, query_params.join("&"))
         };
 
-        let response = self.get(&request_path).await?;
+        let response = self.client.get(&request_path).await?;
         response.json().await.map_err(ApiError::from)
     }
 
@@ -605,7 +605,7 @@ impl InstallationClient {
     /// `GET /repos/{owner}/{repo}/compare/{base}...{head}`
     ///
     /// See <https://docs.github.com/en/rest/commits/commits#compare-two-commits>
-    pub async fn compare_commits(
+    pub async fn compare(
         &self,
         owner: &str,
         repo: &str,
@@ -619,7 +619,7 @@ impl InstallationClient {
             urlencoding::encode(base),
             urlencoding::encode(head)
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
         response.json().await.map_err(ApiError::from)
     }
 }

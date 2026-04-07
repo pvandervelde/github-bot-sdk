@@ -1,3 +1,4 @@
+// Spec: docs/specs/interfaces/additional-operations.md
 // Workflow and workflow run operations for GitHub API
 
 use chrono::{DateTime, Utc};
@@ -98,10 +99,20 @@ pub struct TriggerWorkflowRequest {
     pub inputs: Option<std::collections::HashMap<String, String>>,
 }
 
-impl InstallationClient {
-    // ========================================================================
-    // Workflow Operations
-    // ========================================================================
+/// Domain client for GitHub Actions workflow and run operations.
+///
+/// Obtained via [`InstallationClient::workflows()`]. Cheap to clone (Arc-backed).
+///
+/// See docs/specs/interfaces/additional-operations.md
+#[derive(Debug, Clone)]
+pub struct WorkflowsClient {
+    client: InstallationClient,
+}
+
+impl WorkflowsClient {
+    pub(crate) fn new(client: InstallationClient) -> Self {
+        Self { client }
+    }
 
     /// List workflows in a repository.
     ///
@@ -133,9 +144,9 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_workflows(&self, owner: &str, repo: &str) -> Result<Vec<Workflow>, ApiError> {
+    pub async fn list(&self, owner: &str, repo: &str) -> Result<Vec<Workflow>, ApiError> {
         let path = format!("/repos/{}/{}/actions/workflows", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -195,7 +206,7 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_workflow(
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
@@ -205,7 +216,7 @@ impl InstallationClient {
             "/repos/{}/{}/actions/workflows/{}",
             owner, repo, workflow_id
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -264,7 +275,7 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn trigger_workflow(
+    pub async fn trigger(
         &self,
         owner: &str,
         repo: &str,
@@ -275,7 +286,7 @@ impl InstallationClient {
             "/repos/{}/{}/actions/workflows/{}/dispatches",
             owner, repo, workflow_id
         );
-        let response = self.post(&path, &request).await?;
+        let response = self.client.post(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -341,7 +352,7 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_workflow_runs(
+    pub async fn list_runs(
         &self,
         owner: &str,
         repo: &str,
@@ -351,7 +362,7 @@ impl InstallationClient {
             "/repos/{}/{}/actions/workflows/{}/runs",
             owner, repo, workflow_id
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -410,14 +421,14 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_workflow_run(
+    pub async fn get_run(
         &self,
         owner: &str,
         repo: &str,
         run_id: u64,
     ) -> Result<WorkflowRun, ApiError> {
         let path = format!("/repos/{}/{}/actions/runs/{}", owner, repo, run_id);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -471,14 +482,9 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn cancel_workflow_run(
-        &self,
-        owner: &str,
-        repo: &str,
-        run_id: u64,
-    ) -> Result<(), ApiError> {
+    pub async fn cancel_run(&self, owner: &str, repo: &str, run_id: u64) -> Result<(), ApiError> {
         let path = format!("/repos/{}/{}/actions/runs/{}/cancel", owner, repo, run_id);
-        let response = self.post(&path, &serde_json::json!({})).await?;
+        let response = self.client.post(&path, &serde_json::json!({})).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -539,14 +545,9 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn rerun_workflow_run(
-        &self,
-        owner: &str,
-        repo: &str,
-        run_id: u64,
-    ) -> Result<(), ApiError> {
+    pub async fn rerun_run(&self, owner: &str, repo: &str, run_id: u64) -> Result<(), ApiError> {
         let path = format!("/repos/{}/{}/actions/runs/{}/rerun", owner, repo, run_id);
-        let response = self.post(&path, &serde_json::json!({})).await?;
+        let response = self.client.post(&path, &serde_json::json!({})).await?;
 
         let status = response.status();
         if !status.is_success() {

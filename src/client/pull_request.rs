@@ -1,11 +1,11 @@
-// GENERATED FROM: docs/spec/interfaces/pull-request-operations.md
-// Pull request and review operations for GitHub API
+// Spec: docs/specs/interfaces/pull-request-operations.md
+// Pull request, review, comment, and label operations.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::client::issue::{IssueUser, Label, Milestone};
-use crate::client::InstallationClient;
+use crate::client::issue::{Comment, IssueUser, Label, Milestone};
+use crate::client::{extract_page_number, parse_link_header, InstallationClient, PagedResponse};
 use crate::error::ApiError;
 
 /// GitHub pull request.
@@ -314,17 +314,62 @@ pub struct CreatePullRequestCommentRequest {
     pub body: String,
 }
 
-/// Request to set milestone on a pull request.
+/// Request to update a pull request comment.
 #[derive(Debug, Clone, Serialize)]
-pub struct SetPullRequestMilestoneRequest {
-    /// Milestone number (None to clear milestone)
-    pub milestone: Option<u64>,
+pub struct UpdatePullRequestCommentRequest {
+    /// Comment body content (Markdown, required)
+    pub body: String,
 }
 
-impl InstallationClient {
-    // ========================================================================
-    // Pull Request Operations
-    // ========================================================================
+// ============================================================================
+// Shared error-mapping helper
+// ============================================================================
+
+async fn map_error(status: reqwest::StatusCode, response: reqwest::Response) -> ApiError {
+    match status.as_u16() {
+        401 => ApiError::AuthenticationFailed,
+        403 => ApiError::AuthorizationFailed,
+        404 => ApiError::NotFound,
+        422 => {
+            let message = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Validation failed".to_string());
+            ApiError::InvalidRequest { message }
+        }
+        _ => {
+            let message = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            ApiError::HttpError {
+                status: status.as_u16(),
+                message,
+            }
+        }
+    }
+}
+
+// ============================================================================
+// PullRequestsClient
+// ============================================================================
+
+/// Domain client for pull request operations.
+///
+/// Obtained via [`InstallationClient::pull_requests()`]. Cheap to clone (Arc-backed).
+///
+/// See docs/specs/interfaces/pull-request-operations.md
+#[derive(Debug, Clone)]
+pub struct PullRequestsClient {
+    client: InstallationClient,
+}
+
+impl PullRequestsClient {
+    pub(crate) fn new(client: InstallationClient) -> Self {
+        Self { client }
+    }
+
+    // --- Pull Request CRUD ---
 
     /// List pull requests in a repository.
     ///
@@ -359,13 +404,13 @@ impl InstallationClient {
     /// ```
     ///
     /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn list_pull_requests(
+    pub async fn list(
         &self,
         owner: &str,
         repo: &str,
         state: Option<&str>,
         page: Option<u32>,
-    ) -> Result<crate::client::PagedResponse<PullRequest>, ApiError> {
+    ) -> Result<PagedResponse<PullRequest>, ApiError> {
         let mut path = format!("/repos/{}/{}/pulls", owner, repo);
         let mut query_params = Vec::new();
 
@@ -380,7 +425,7 @@ impl InstallationClient {
             path = format!("{}?{}", path, query_params.join("&"));
         }
 
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
         let status = response.status();
 
         if !status.is_success() {
@@ -406,13 +451,13 @@ impl InstallationClient {
             .headers()
             .get("Link")
             .and_then(|h| h.to_str().ok())
-            .map(|h| crate::client::parse_link_header(Some(h)))
+            .map(|h| parse_link_header(Some(h)))
             .unwrap_or_default();
 
         // Parse response body
         let items: Vec<PullRequest> = response.json().await.map_err(ApiError::from)?;
 
-        Ok(crate::client::PagedResponse {
+        Ok(PagedResponse {
             items,
             total_count: None, // GitHub doesn't provide total count in list responses
             pagination,
@@ -422,14 +467,14 @@ impl InstallationClient {
     /// Get a specific pull request by number.
     ///
     /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn get_pull_request(
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
         pull_number: u64,
     ) -> Result<PullRequest, ApiError> {
         let path = format!("/repos/{}/{}/pulls/{}", owner, repo, pull_number);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -455,14 +500,14 @@ impl InstallationClient {
     /// Create a new pull request.
     ///
     /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn create_pull_request(
+    pub async fn create(
         &self,
         owner: &str,
         repo: &str,
         request: CreatePullRequestRequest,
     ) -> Result<PullRequest, ApiError> {
         let path = format!("/repos/{}/{}/pulls", owner, repo);
-        let response = self.post(&path, &request).await?;
+        let response = self.client.post(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -495,7 +540,7 @@ impl InstallationClient {
     /// Update an existing pull request.
     ///
     /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn update_pull_request(
+    pub async fn update(
         &self,
         owner: &str,
         repo: &str,
@@ -503,7 +548,7 @@ impl InstallationClient {
         request: UpdatePullRequestRequest,
     ) -> Result<PullRequest, ApiError> {
         let path = format!("/repos/{}/{}/pulls/{}", owner, repo, pull_number);
-        let response = self.patch(&path, &request).await?;
+        let response = self.client.patch(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -536,7 +581,7 @@ impl InstallationClient {
     /// Merge a pull request.
     ///
     /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn merge_pull_request(
+    pub async fn merge(
         &self,
         owner: &str,
         repo: &str,
@@ -544,7 +589,7 @@ impl InstallationClient {
         request: MergePullRequestRequest,
     ) -> Result<MergeResult, ApiError> {
         let path = format!("/repos/{}/{}/pulls/{}/merge", owner, repo, pull_number);
-        let response = self.put(&path, &request).await?;
+        let response = self.client.put(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -590,7 +635,7 @@ impl InstallationClient {
     /// Set the milestone on a pull request.
     ///
     /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn set_pull_request_milestone(
+    pub async fn set_milestone(
         &self,
         owner: &str,
         repo: &str,
@@ -601,8 +646,7 @@ impl InstallationClient {
             milestone: milestone_number,
             ..Default::default()
         };
-        self.update_pull_request(owner, repo, pull_number, request)
-            .await
+        self.update(owner, repo, pull_number, request).await
     }
 
     // ========================================================================
@@ -619,7 +663,7 @@ impl InstallationClient {
         pull_number: u64,
     ) -> Result<Vec<Review>, ApiError> {
         let path = format!("/repos/{}/{}/pulls/{}/reviews", owner, repo, pull_number);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -656,7 +700,7 @@ impl InstallationClient {
             "/repos/{}/{}/pulls/{}/reviews/{}",
             owner, repo, pull_number, review_id
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -690,7 +734,7 @@ impl InstallationClient {
         request: CreateReviewRequest,
     ) -> Result<Review, ApiError> {
         let path = format!("/repos/{}/{}/pulls/{}/reviews", owner, repo, pull_number);
-        let response = self.post(&path, &request).await?;
+        let response = self.client.post(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -735,7 +779,7 @@ impl InstallationClient {
             "/repos/{}/{}/pulls/{}/reviews/{}",
             owner, repo, pull_number, review_id
         );
-        let response = self.put(&path, &request).await?;
+        let response = self.client.put(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -780,7 +824,7 @@ impl InstallationClient {
             "/repos/{}/{}/pulls/{}/reviews/{}/dismissals",
             owner, repo, pull_number, review_id
         );
-        let response = self.put(&path, &request).await?;
+        let response = self.client.put(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -814,78 +858,104 @@ impl InstallationClient {
     // Pull Request Comment Operations
     // ========================================================================
 
-    /// List comments on a pull request.
+    /// List all conversation-thread comments on a pull request (auto-paginated).
     ///
-    /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn list_pull_request_comments(
+    /// Uses the Issues comments endpoint per GitHub API design.
+    ///
+    /// See docs/specs/interfaces/pull-request-operations.md
+    pub async fn list_comments(
         &self,
         owner: &str,
         repo: &str,
         pull_number: u64,
-    ) -> Result<Vec<PullRequestComment>, ApiError> {
-        let path = format!("/repos/{}/{}/pulls/{}/comments", owner, repo, pull_number);
-        let response = self.get(&path).await?;
+    ) -> Result<Vec<Comment>, ApiError> {
+        let base = format!("/repos/{}/{}/issues/{}/comments", owner, repo, pull_number);
+        let mut all_items: Vec<Comment> = Vec::new();
+        let mut path = format!("{}?per_page=100", base);
 
-        let status = response.status();
-        if !status.is_success() {
-            return Err(match status.as_u16() {
-                404 => ApiError::NotFound,
-                403 => ApiError::AuthorizationFailed,
-                401 => ApiError::AuthenticationFailed,
-                _ => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Unknown error".to_string());
-                    ApiError::HttpError {
-                        status: status.as_u16(),
-                        message,
-                    }
-                }
-            });
+        loop {
+            let response = self.client.get(&path).await?;
+            let status = response.status();
+            if !status.is_success() {
+                return Err(map_error(status, response).await);
+            }
+
+            let next_page: Option<u32> = response
+                .headers()
+                .get("Link")
+                .and_then(|h| h.to_str().ok())
+                .and_then(|h| parse_link_header(Some(h)).next)
+                .as_deref()
+                .and_then(extract_page_number);
+
+            let items: Vec<Comment> = response.json().await.map_err(ApiError::from)?;
+            all_items.extend(items);
+
+            match next_page {
+                Some(page) => path = format!("{}?per_page=100&page={}", base, page),
+                None => break,
+            }
         }
-        response.json().await.map_err(ApiError::from)
+
+        Ok(all_items)
     }
 
-    /// Create a comment on a pull request.
+    /// Add a conversation-thread comment to a pull request.
     ///
-    /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn create_pull_request_comment(
+    /// Uses the Issues comments endpoint per GitHub API design.
+    ///
+    /// See docs/specs/interfaces/pull-request-operations.md
+    pub async fn create_comment(
         &self,
         owner: &str,
         repo: &str,
         pull_number: u64,
         request: CreatePullRequestCommentRequest,
-    ) -> Result<PullRequestComment, ApiError> {
-        let path = format!("/repos/{}/{}/pulls/{}/comments", owner, repo, pull_number);
-        let response = self.post(&path, &request).await?;
-
+    ) -> Result<Comment, ApiError> {
+        let path = format!("/repos/{}/{}/issues/{}/comments", owner, repo, pull_number);
+        let response = self.client.post(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(match status.as_u16() {
-                422 => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Validation failed".to_string());
-                    ApiError::InvalidRequest { message }
-                }
-                404 => ApiError::NotFound,
-                403 => ApiError::AuthorizationFailed,
-                401 => ApiError::AuthenticationFailed,
-                _ => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Unknown error".to_string());
-                    ApiError::HttpError {
-                        status: status.as_u16(),
-                        message,
-                    }
-                }
-            });
+            return Err(map_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
+    }
+
+    /// Update an existing pull request conversation-thread comment.
+    ///
+    /// See docs/specs/interfaces/pull-request-operations.md
+    pub async fn update_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+        request: UpdatePullRequestCommentRequest,
+    ) -> Result<Comment, ApiError> {
+        let path = format!("/repos/{}/{}/issues/comments/{}", owner, repo, comment_id);
+        let response = self.client.patch(&path, &request).await?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(map_error(status, response).await);
+        }
+        response.json().await.map_err(ApiError::from)
+    }
+
+    /// Delete a pull request conversation-thread comment.
+    ///
+    /// See docs/specs/interfaces/pull-request-operations.md
+    pub async fn delete_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        comment_id: u64,
+    ) -> Result<(), ApiError> {
+        let path = format!("/repos/{}/{}/issues/comments/{}", owner, repo, comment_id);
+        let response = self.client.delete(&path).await?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(map_error(status, response).await);
+        }
+        Ok(())
     }
 
     // ========================================================================
@@ -894,8 +964,8 @@ impl InstallationClient {
 
     /// Add labels to a pull request.
     ///
-    /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn add_labels_to_pull_request(
+    /// See docs/specs/interfaces/pull-request-operations.md
+    pub async fn add_labels(
         &self,
         owner: &str,
         repo: &str,
@@ -904,7 +974,7 @@ impl InstallationClient {
     ) -> Result<Vec<Label>, ApiError> {
         // PRs use the same label endpoint as issues
         let path = format!("/repos/{}/{}/issues/{}/labels", owner, repo, pull_number);
-        let response = self.post(&path, &labels).await?;
+        let response = self.client.post(&path, &labels).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -937,7 +1007,7 @@ impl InstallationClient {
     /// Remove a label from a pull request.
     ///
     /// See docs/spec/interfaces/pull-request-operations.md
-    pub async fn remove_label_from_pull_request(
+    pub async fn remove_label(
         &self,
         owner: &str,
         repo: &str,
@@ -949,7 +1019,7 @@ impl InstallationClient {
             "/repos/{}/{}/issues/{}/labels/{}",
             owner, repo, pull_number, name
         );
-        let response = self.delete(&path).await?;
+        let response = self.client.delete(&path).await?;
 
         let status = response.status();
         if !status.is_success() {

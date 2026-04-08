@@ -451,3 +451,125 @@ mod pull_request_operations {
         assert_eq!(pr.title, "New Feature");
     }
 }
+
+mod comment_operations {
+    use super::*;
+
+    /// Verify update_comment patches an existing pull request comment and returns it.
+    ///
+    /// Tests PATCH /repos/{owner}/{repo}/issues/comments/{id} endpoint.
+    #[tokio::test]
+    async fn test_update_comment() {
+        let mock_server = MockServer::start().await;
+
+        let updated_comment_json = serde_json::json!({
+            "id": 1,
+            "node_id": "MDEyOklzc3VlQ29tbWVudDE=",
+            "body": "Updated comment",
+            "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+            "created_at": "2011-04-14T16:00:49Z",
+            "updated_at": "2011-04-14T17:00:49Z",
+            "html_url": "https://github.com/octocat/Hello-World/pull/1#issuecomment-1"
+        });
+
+        Mock::given(method("PATCH"))
+            .and(path("/repos/octocat/Hello-World/issues/comments/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(updated_comment_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let request = UpdatePullRequestCommentRequest {
+            body: "Updated comment".to_string(),
+        };
+
+        let result = client
+            .pull_requests()
+            .update_comment("octocat", "Hello-World", 1, request)
+            .await;
+
+        assert!(result.is_ok());
+        let comment = result.unwrap();
+        assert_eq!(comment.id, 1);
+        assert_eq!(comment.body, "Updated comment");
+    }
+
+    /// Verify delete_comment removes a pull request comment.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/issues/comments/{id} endpoint.
+    #[tokio::test]
+    async fn test_delete_comment() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/repos/octocat/Hello-World/issues/comments/1"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .pull_requests()
+            .delete_comment("octocat", "Hello-World", 1)
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    /// Verify update_comment returns NotFound for a non-existent comment.
+    ///
+    /// Tests PATCH /repos/{owner}/{repo}/issues/comments/{id} returning 404.
+    #[tokio::test]
+    async fn test_update_comment_not_found() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("PATCH"))
+            .and(path("/repos/octocat/Hello-World/issues/comments/999"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found",
+                "documentation_url": "https://docs.github.com/rest/issues/comments#update-an-issue-comment"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let request = UpdatePullRequestCommentRequest {
+            body: "text".to_string(),
+        };
+
+        let result = client
+            .pull_requests()
+            .update_comment("octocat", "Hello-World", 999, request)
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound));
+    }
+}

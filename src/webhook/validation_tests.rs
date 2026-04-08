@@ -363,9 +363,12 @@ async fn test_validate_with_large_payload() {
 
     // Assert
     assert!(is_valid, "Large payload should validate correctly");
+    // Allow up to 1s on a slow/loaded CI machine; HMAC-SHA256 over 1 MB is
+    // CPU-bound and typically completes in <10ms, but wall-clock assertions
+    // are inherently environment-sensitive.
     assert!(
-        duration.as_millis() < 100,
-        "Validation should complete in <100ms, took {}ms",
+        duration.as_millis() < 1000,
+        "Validation should complete in <1000ms, took {}ms",
         duration.as_millis()
     );
 }

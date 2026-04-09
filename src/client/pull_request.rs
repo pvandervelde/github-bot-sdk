@@ -4,7 +4,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::client::issue::{Comment, IssueUser, Label, Milestone};
+use crate::client::issue::{Comment, IssueUser, Label, LabelsRequest, Milestone};
 use crate::client::{extract_page_number, parse_link_header, InstallationClient, PagedResponse};
 use crate::error::ApiError;
 
@@ -386,16 +386,16 @@ impl PullRequestsClient {
     /// # Examples
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::PullRequestsClient;
+    /// # async fn example(client: &PullRequestsClient) -> Result<(), Box<dyn std::error::Error>> {
     /// // Get first page
-    /// let response = client.list_pull_requests("owner", "repo", None, None).await?;
+    /// let response = client.list("owner", "repo", None, None).await?;
     /// println!("Got {} pull requests", response.items.len());
     ///
     /// // Check if more pages exist
     /// if response.has_next() {
     ///     if let Some(next_page) = response.next_page_number() {
-    ///         let next_response = client.list_pull_requests("owner", "repo", None, Some(next_page)).await?;
+    ///         let next_response = client.list("owner", "repo", None, Some(next_page)).await?;
     ///         println!("Got {} more PRs", next_response.items.len());
     ///     }
     /// }
@@ -974,7 +974,8 @@ impl PullRequestsClient {
     ) -> Result<Vec<Label>, ApiError> {
         // PRs use the same label endpoint as issues
         let path = format!("/repos/{}/{}/issues/{}/labels", owner, repo, pull_number);
-        let response = self.client.post(&path, &labels).await?;
+        let body = LabelsRequest { labels };
+        let response = self.client.post(&path, &body).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -1000,6 +1001,29 @@ impl PullRequestsClient {
                     }
                 }
             });
+        }
+        response.json().await.map_err(ApiError::from)
+    }
+
+    /// Replace all labels on a pull request.
+    ///
+    /// Replaces the entire set of labels. Pass an empty vec to clear all labels.
+    ///
+    /// See docs/specs/interfaces/pull-request-operations.md
+    pub async fn replace_labels(
+        &self,
+        owner: &str,
+        repo: &str,
+        pull_number: u64,
+        labels: Vec<String>,
+    ) -> Result<Vec<Label>, ApiError> {
+        // PRs use the same label endpoint as issues
+        let path = format!("/repos/{}/{}/issues/{}/labels", owner, repo, pull_number);
+        let body = LabelsRequest { labels };
+        let response = self.client.put(&path, &body).await?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(map_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }

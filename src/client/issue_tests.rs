@@ -2278,6 +2278,24 @@ mod activity_operations {
                 "created_at": "2022-03-10T14:00:00Z"
             },
             {
+                "event": "commented",
+                "id": 2,
+                "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+                "body": "This is a comment",
+                "created_at": "2022-03-10T15:00:00Z",
+                "updated_at": "2022-03-10T15:00:00Z",
+                "html_url": "https://github.com/octocat/Hello-World/issues/1347#issuecomment-2"
+            },
+            {
+                "event": "commented",
+                "id": 3,
+                "user": {"login": "monalisa", "id": 2, "node_id": "MDQ6VXNlcjI=", "type": "User"},
+                "body": null,
+                "created_at": "2022-03-10T16:00:00Z",
+                "updated_at": "2022-03-10T16:00:00Z",
+                "html_url": "https://github.com/octocat/Hello-World/issues/1347#issuecomment-3"
+            },
+            {
                 "event": "totally_unknown_future_event"
             }
         ]);
@@ -2306,7 +2324,34 @@ mod activity_operations {
 
         assert!(result.is_ok());
         let events = result.unwrap();
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 4);
+
+        // Verify the commented event with body
+        if let crate::client::issue::TimelineEvent::Commented {
+            id,
+            user,
+            body,
+            html_url,
+            ..
+        } = &events[1]
+        {
+            assert_eq!(*id, 2);
+            assert_eq!(user.login, "octocat");
+            assert_eq!(body.as_deref(), Some("This is a comment"));
+            assert_eq!(
+                html_url,
+                "https://github.com/octocat/Hello-World/issues/1347#issuecomment-2"
+            );
+        } else {
+            panic!("Expected Commented event at index 1");
+        }
+
+        // Verify the commented event with null body
+        if let crate::client::issue::TimelineEvent::Commented { body, .. } = &events[2] {
+            assert!(body.is_none());
+        } else {
+            panic!("Expected Commented event at index 2");
+        }
     }
 }
 

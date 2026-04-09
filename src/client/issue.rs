@@ -332,10 +332,14 @@ pub struct IssueRename {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum TimelineEvent {
+    /// A comment posted on the issue. Note: GitHub returns comment objects
+    /// here (with `user`, not `actor`) so this variant is structurally
+    /// different from the other event kinds.
+    #[serde(rename = "commented")]
     Commented {
         id: u64,
-        actor: IssueUser,
-        body: String,
+        user: IssueUser,
+        body: Option<String>,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
         html_url: String,
@@ -461,8 +465,7 @@ pub struct Reaction {
 /// Sort direction for list queries.
 ///
 /// See docs/specs/interfaces/milestones-client.md
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone)]
 pub enum SortDirection {
     Asc,
     Desc,
@@ -471,8 +474,7 @@ pub enum SortDirection {
 /// Sort field for milestone list queries.
 ///
 /// See docs/specs/interfaces/milestones-client.md
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone)]
 pub enum MilestoneSortField {
     DueOn,
     Completeness,
@@ -481,13 +483,10 @@ pub enum MilestoneSortField {
 /// Filter and sort options for listing milestones.
 ///
 /// See docs/specs/interfaces/milestones-client.md
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default)]
 pub struct ListMilestonesQuery {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<MilestoneState>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub sort: Option<MilestoneSortField>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub direction: Option<SortDirection>,
 }
 
@@ -525,8 +524,8 @@ pub struct UpdateMilestoneRequest {
 // ============================================================================
 
 #[derive(Debug, Clone, Serialize)]
-struct LabelsRequest {
-    labels: Vec<String>,
+pub(crate) struct LabelsRequest {
+    pub(crate) labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -215,9 +215,9 @@ impl ReleasesClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let releases = client.list_releases("owner", "repo").await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let releases = client.list("owner", "repo").await?;
     /// for release in releases {
     ///     println!("Release: {} ({})", release.name.unwrap_or_default(), release.tag_name);
     /// }
@@ -271,9 +271,9 @@ impl ReleasesClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let release = client.get_latest_release("owner", "repo").await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get_latest("owner", "repo").await?;
     /// println!("Latest: {} ({})", release.name.unwrap_or_default(), release.tag_name);
     /// # Ok(())
     /// # }
@@ -326,9 +326,9 @@ impl ReleasesClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let release = client.get_release_by_tag("owner", "repo", "v1.0.0").await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get_by_tag("owner", "repo", "v1.0.0").await?;
     /// println!("Release: {}", release.tag_name);
     /// # Ok(())
     /// # }
@@ -387,9 +387,9 @@ impl ReleasesClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let release = client.get_release("owner", "repo", 12345).await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get("owner", "repo", 12345).await?;
     /// println!("Release: {}", release.tag_name);
     /// # Ok(())
     /// # }
@@ -443,8 +443,8 @@ impl ReleasesClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::{InstallationClient, CreateReleaseRequest};
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::{ReleasesClient, CreateReleaseRequest};
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let request = CreateReleaseRequest {
     ///     tag_name: "v1.0.0".to_string(),
     ///     name: Some("Version 1.0.0".to_string()),
@@ -454,7 +454,7 @@ impl ReleasesClient {
     ///     target_commitish: None,
     ///     generate_release_notes: None,
     /// };
-    /// let release = client.create_release("owner", "repo", request).await?;
+    /// let release = client.create("owner", "repo", request).await?;
     /// println!("Created release: {}", release.tag_name);
     /// # Ok(())
     /// # }
@@ -521,14 +521,14 @@ impl ReleasesClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::{InstallationClient, UpdateReleaseRequest};
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::{ReleasesClient, UpdateReleaseRequest};
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let request = UpdateReleaseRequest {
     ///     name: Some("Updated name".to_string()),
     ///     body: Some("Updated notes".to_string()),
     ///     ..Default::default()
     /// };
-    /// let release = client.update_release("owner", "repo", 12345, request).await?;
+    /// let release = client.update("owner", "repo", 12345, request).await?;
     /// println!("Updated release: {}", release.tag_name);
     /// # Ok(())
     /// # }
@@ -594,9 +594,9 @@ impl ReleasesClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.delete_release("owner", "repo", 12345).await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.delete("owner", "repo", 12345).await?;
     /// println!("Release deleted");
     /// # Ok(())
     /// # }

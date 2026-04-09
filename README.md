@@ -107,11 +107,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create installation client for specific installation
     let installation_id = InstallationId::new(98765);
-    let installation_client = client.installation(installation_id);
+    let installation_client = client.installation_by_id(installation_id).await?;
 
-    // Use the installation client for operations
-    let repos = installation_client.list_repositories().await?;
-    println!("Found {} repositories", repos.len());
+    // Use domain sub-clients for operations
+    let repo = installation_client.repositories().get("owner", "repo").await?;
+    println!("Repository: {}", repo.full_name);
 
     Ok(())
 }
@@ -149,53 +149,199 @@ async fn handle_webhook(
 ### Repository Operations
 
 ```rust
-use github_bot_sdk::client::{GitHubClient, RepositoryClient};
-use github_bot_sdk::auth::{InstallationId, RepositoryId};
+use github_bot_sdk::client::GitHubClient;
+use github_bot_sdk::auth::InstallationId;
 
 async fn repository_operations(
     client: &GitHubClient,
     installation_id: InstallationId,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let installation = client.installation(installation_id);
+    let installation = client.installation_by_id(installation_id).await?;
+    let repos = installation.repositories();
 
     // Get repository information
-    let repo = installation
-        .get_repository("owner", "repo")
-        .await?;
+    let repo = repos.get("owner", "repo").await?;
     println!("Repository: {} (stars: {})", repo.full_name, repo.stargazers_count);
 
     // List branches
-    let branches = installation
-        .list_branches("owner", "repo")
-        .await?;
-
+    let branches = repos.list_branches("owner", "repo").await?;
     for branch in branches {
         println!("Branch: {}", branch.name);
     }
+
+    // Work with git refs
+    let head = repos.get_ref("owner", "repo", "heads/main").await?;
+    println!("HEAD SHA: {}", head.object.sha);
 
     Ok(())
 }
 ```
 
-### Issue and Pull Request Operations
+### Issue Operations
 
 ```rust
-use github_bot_sdk::client::GitHubClient;
-use github_bot_sdk::auth::InstallationId;
+async fn issue_operations(installation: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    let issues = installation.issues();
+    let labels = installation.labels();
+    let milestones = installation.milestones();
 
-async fn issue_pr_operations(
-    client: &GitHubClient,
-    installation_id: InstallationId,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Get installation
-    let installation = client.get_installation(installation_id).await?;
-    println!("Working with installation: {}", installation.id.as_u64());
+    // List and get issues
+    let page = issues.list("owner", "repo", Some("open"), None).await?;
+    let issue = issues.get("owner", "repo", 123).await?;
 
-    // Note: Full issue/PR operations are available through client methods
-    // See client module documentation for complete API
+    // Create and update
+    let new_issue = issues.create("owner", "repo", CreateIssueRequest {
+        title: "Bug report".to_string(),
+        body: Some("Description".to_string()),
+        ..Default::default()
+    }).await?;
+    issues.update("owner", "repo", 123, UpdateIssueRequest {
+        title: Some("Updated title".to_string()),
+        ..Default::default()
+    }).await?;
+
+    // Comments
+    let comment = issues.create_comment("owner", "repo", 123, CreateCommentRequest {
+        body: "Comment text".to_string(),
+    }).await?;
+    issues.delete_comment("owner", "repo", comment.id).await?;
+
+    // Labels on an issue
+    issues.add_labels("owner", "repo", 123, vec!["bug".to_string()]).await?;
+    issues.remove_label("owner", "repo", 123, "wontfix").await?;
+    issues.replace_labels("owner", "repo", 123, vec!["bug".to_string()]).await?;
+
+    // Assignees
+    issues.add_assignees("owner", "repo", 123, vec!["octocat".to_string()]).await?;
+
+    // Reactions
+    issues.create_reaction("owner", "repo", 123, ReactionContent::PlusOne).await?;
+
+    // Lock/unlock
+    issues.lock("owner", "repo", 123, None).await?;
+    issues.unlock("owner", "repo", 123).await?;
+
+    // Label catalogue CRUD
+    labels.create("owner", "repo", CreateLabelRequest {
+        name: "new-label".to_string(),
+        color: "ff0000".to_string(),
+        description: None,
+    }).await?;
+
+    // Milestones
+    let milestone = milestones.create("owner", "repo", CreateMilestoneRequest {
+        title: "v2.0".to_string(),
+        ..Default::default()
+    }).await?;
 
     Ok(())
 }
+```
+
+### Pull Request Operations
+
+```rust
+async fn pr_operations(installation: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    let prs = installation.pull_requests();
+
+    // List and get
+    let page = prs.list("owner", "repo", None, None).await?;
+    let pr = prs.get("owner", "repo", 456).await?;
+
+    // Create and update
+    let new_pr = prs.create("owner", "repo", CreatePullRequestRequest {
+        title: "Feature: New capability".to_string(),
+        head: "feature-branch".to_string(),
+        base: "main".to_string(),
+        body: Some("Detailed description".to_string()),
+        ..Default::default()
+    }).await?;
+
+    // Merge
+    prs.merge("owner", "repo", 456, MergePullRequestRequest {
+        commit_message: Some("Merge commit message".to_string()),
+        ..Default::default()
+    }).await?;
+
+    // Reviews
+    prs.create_review("owner", "repo", 456, CreateReviewRequest {
+        body: Some("Looks good!".to_string()),
+        event: "APPROVE".to_string(),
+        ..Default::default()
+    }).await?;
+
+    // Conversation comments
+    let comment = prs.create_comment("owner", "repo", 456, CreatePullRequestCommentRequest {
+        body: "Review comment".to_string(),
+    }).await?;
+    prs.update_comment("owner", "repo", comment.id, "Updated comment".to_string()).await?;
+    prs.delete_comment("owner", "repo", comment.id).await?;
+
+    Ok(())
+}
+```
+
+### Release Operations
+
+```rust
+async fn release_operations(installation: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    let releases = installation.releases();
+
+    // List releases
+    let page = releases.list("owner", "repo", None, None).await?;
+
+    // Get latest release
+    let latest = releases.get_latest("owner", "repo").await?;
+    println!("Latest: {}", latest.tag_name);
+
+    // Create release
+    let release = releases.create("owner", "repo", CreateReleaseRequest {
+        tag_name: "v1.0.0".to_string(),
+        name: Some("Version 1.0.0".to_string()),
+        body: Some("Release notes".to_string()),
+        ..Default::default()
+    }).await?;
+
+    Ok(())
+}
+```
+
+### Workflow Operations
+
+```rust
+async fn workflow_operations(installation: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    let workflows = installation.workflows();
+
+    // List workflows
+    let page = workflows.list("owner", "repo", None, None).await?;
+
+    // Trigger workflow dispatch
+    workflows.trigger("owner", "repo", "ci.yml", TriggerWorkflowRequest {
+        ref_name: "main".to_string(),
+        inputs: None,
+    }).await?;
+
+    // List workflow runs
+    let runs = workflows.list_runs("owner", "repo", "ci.yml", None, None).await?;
+
+    Ok(())
+}
+```
+
+### Project Operations (GitHub Projects V2)
+
+```rust
+async fn project_operations(installation: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    let projects = installation.projects();
+
+    // List projects for an organisation
+    let org_projects = projects.list_for_org("owner", None, None).await?;
+
+    // Add an issue to a project
+    let item = projects.add_item("owner", 1, "I_kwDOAE1L0M5abc123").await?;
+
+    // Get projects linked to an issue
+    let linked = projects.list_for_issue("owner", "repo", 42).await?;
 
     Ok(())
 }
@@ -275,150 +421,145 @@ The SDK includes built-in token caching to minimize API calls:
 #### Repository Operations
 
 ```rust
-// Get repository details
-let repo = installation.get_repository("owner", "repo").await?;
+let repos = installation.repositories();
 
-// List repositories for installation
-let repos = installation.list_repositories().await?;
+// Get repository details
+let repo = repos.get("owner", "repo").await?;
 
 // Get branch information
-let branch = installation.get_branch("owner", "repo", "main").await?;
+let branch = repos.get_branch("owner", "repo", "main").await?;
 
 // List all branches
-let branches = installation.list_branches("owner", "repo").await?;
+let branches = repos.list_branches("owner", "repo").await?;
 
 // Create a branch
-installation.create_branch("owner", "repo", "feature-branch", "base-sha").await?;
+repos.create_branch("owner", "repo", "feature-branch", "base-sha").await?;
 
-// Delete a branch
-installation.delete_branch("owner", "repo", "old-branch").await?;
+// Work with git refs
+let git_ref = repos.get_ref("owner", "repo", "heads/main").await?;
+repos.create_ref("owner", "repo", "refs/heads/new-branch", "sha").await?;
+repos.delete_ref("owner", "repo", "heads/old-branch").await?;
+
+// Commits
+let commit = repos.get_commit("owner", "repo", "abc123").await?;
+let comparison = repos.compare("owner", "repo", "v1.0.0", "v1.1.0").await?;
 ```
 
 #### Issue Operations
 
 ```rust
+let issues = installation.issues();
+
 // List issues
-let issues = installation.list_issues("owner", "repo").await?;
+let page = issues.list("owner", "repo", Some("open"), None).await?;
 
 // Get specific issue
-let issue = installation.get_issue("owner", "repo", 123).await?;
+let issue = issues.get("owner", "repo", 123).await?;
 
 // Create issue
-let new_issue = installation
-    .create_issue("owner", "repo", "Title", "Description")
-    .await?;
+let new_issue = issues.create("owner", "repo", CreateIssueRequest {
+    title: "Bug report".to_string(),
+    body: Some("Description".to_string()),
+    ..Default::default()
+}).await?;
 
 // Update issue
-installation
-    .update_issue("owner", "repo", 123, Some("New Title"), Some("Updated body"))
-    .await?;
-
-// Close issue
-installation.close_issue("owner", "repo", 123).await?;
+issues.update("owner", "repo", 123, UpdateIssueRequest {
+    title: Some("New Title".to_string()),
+    ..Default::default()
+}).await?;
 
 // Add comment
-installation
-    .create_issue_comment("owner", "repo", 123, "Comment text")
-    .await?;
+let comment = issues.create_comment("owner", "repo", 123, CreateCommentRequest {
+    body: "Comment text".to_string(),
+}).await?;
 
-// Add/remove labels
-installation.add_labels("owner", "repo", 123, vec!["bug", "urgent"]).await?;
-installation.remove_label("owner", "repo", 123, "wontfix").await?;
+// Add/remove labels on an issue
+issues.add_labels("owner", "repo", 123, vec!["bug".to_string()]).await?;
+issues.remove_label("owner", "repo", 123, "wontfix").await?;
+
+// Assignees
+issues.add_assignees("owner", "repo", 123, vec!["octocat".to_string()]).await?;
+```
+
+#### Label Catalogue Operations
+
+```rust
+let labels = installation.labels();
+
+// List all repository labels
+let all_labels = labels.list("owner", "repo").await?;
+
+// Create a label
+labels.create("owner", "repo", CreateLabelRequest {
+    name: "new-label".to_string(),
+    color: "ff0000".to_string(),
+    description: Some("A new label".to_string()),
+}).await?;
 ```
 
 #### Pull Request Operations
 
 ```rust
+let prs = installation.pull_requests();
+
 // List pull requests
-let prs = installation.list_pull_requests("owner", "repo").await?;
+let page = prs.list("owner", "repo", None, None).await?;
 
 // Get specific PR
-let pr = installation.get_pull_request("owner", "repo", 456).await?;
+let pr = prs.get("owner", "repo", 456).await?;
 
 // Create pull request
-let new_pr = installation
-    .create_pull_request(
-        "owner",
-        "repo",
-        "Feature: New capability",
-        "feature-branch",
-        "main",
-        "Detailed description"
-    )
-    .await?;
-
-// Update pull request
-installation
-    .update_pull_request("owner", "repo", 456, Some("Updated title"), None)
-    .await?;
+let new_pr = prs.create("owner", "repo", CreatePullRequestRequest {
+    title: "Feature: New capability".to_string(),
+    head: "feature-branch".to_string(),
+    base: "main".to_string(),
+    body: Some("Detailed description".to_string()),
+    ..Default::default()
+}).await?;
 
 // Merge pull request
-installation
-    .merge_pull_request("owner", "repo", 456, "Merge commit message")
-    .await?;
-
-// Request reviewers
-installation
-    .request_reviewers("owner", "repo", 456, vec!["reviewer1", "reviewer2"])
-    .await?;
-
-// Add review comment
-installation
-    .create_review_comment("owner", "repo", 456, "path/to/file.rs", 10, "Review comment")
-    .await?;
-```
-
-#### Project Operations (GitHub Projects V2)
-
-```rust
-// Get project details
-let project = installation.get_project("owner", "repo", project_id).await?;
-
-// List project items
-let items = installation.list_project_items(project_id).await?;
-
-// Add item to project
-installation.add_project_item(project_id, content_id).await?;
-
-// Update project item field
-installation
-    .update_project_item_field(project_id, item_id, field_id, "value")
-    .await?;
+prs.merge("owner", "repo", 456, MergePullRequestRequest {
+    commit_message: Some("Merge commit message".to_string()),
+    ..Default::default()
+}).await?;
 ```
 
 #### Release Operations
 
 ```rust
+let releases = installation.releases();
+
 // List releases
-let releases = installation.list_releases("owner", "repo").await?;
+let page = releases.list("owner", "repo", None, None).await?;
 
 // Get latest release
-let latest = installation.get_latest_release("owner", "repo").await?;
+let latest = releases.get_latest("owner", "repo").await?;
 
 // Create release
-let release = installation
-    .create_release("owner", "repo", "v1.0.0", "Release notes")
-    .await?;
-
-// Upload release asset
-installation
-    .upload_release_asset(release.id, "artifact.zip", asset_bytes)
-    .await?;
+let release = releases.create("owner", "repo", CreateReleaseRequest {
+    tag_name: "v1.0.0".to_string(),
+    name: Some("Version 1.0.0".to_string()),
+    ..Default::default()
+}).await?;
 ```
 
 #### Workflow Operations
 
 ```rust
+let workflows = installation.workflows();
+
 // List workflows
-let workflows = installation.list_workflows("owner", "repo").await?;
+let page = workflows.list("owner", "repo", None, None).await?;
 
 // Trigger workflow dispatch
-installation
-    .dispatch_workflow("owner", "repo", workflow_id, "main", inputs)
-    .await?;
+workflows.trigger("owner", "repo", "ci.yml", TriggerWorkflowRequest {
+    ref_name: "main".to_string(),
+    inputs: None,
+}).await?;
 
 // List workflow runs
-let runs = installation.list_workflow_runs("owner", "repo", workflow_id).await?;
+let runs = workflows.list_runs("owner", "repo", "ci.yml", None, None).await?;
 ```
 
 ### Event Processing
@@ -696,7 +837,7 @@ async fn test_get_repository() {
 
     // Test with mock server
     let client = create_test_client(&mock_server.uri());
-    let repo = client.get_repository("owner", "repo").await.unwrap();
+    let repo = client.repositories().get("owner", "repo").await.unwrap();
     assert_eq!(repo.name, "repo");
 }
 ```

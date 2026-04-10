@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::client::issue::{Comment, IssueUser, Label, LabelsRequest, Milestone};
-use crate::client::{extract_page_number, parse_link_header, InstallationClient, PagedResponse};
+use crate::client::{parse_link_header, InstallationClient, PagedResponse};
 use crate::error::ApiError;
 
 /// GitHub pull request.
@@ -869,35 +869,11 @@ impl PullRequestsClient {
         repo: &str,
         pull_number: u64,
     ) -> Result<Vec<Comment>, ApiError> {
-        let base = format!("/repos/{}/{}/issues/{}/comments", owner, repo, pull_number);
-        let mut all_items: Vec<Comment> = Vec::new();
-        let mut path = format!("{}?per_page=100", base);
-
-        loop {
-            let response = self.client.get(&path).await?;
-            let status = response.status();
-            if !status.is_success() {
-                return Err(map_error(status, response).await);
-            }
-
-            let next_page: Option<u32> = response
-                .headers()
-                .get("Link")
-                .and_then(|h| h.to_str().ok())
-                .and_then(|h| parse_link_header(Some(h)).next)
-                .as_deref()
-                .and_then(extract_page_number);
-
-            let items: Vec<Comment> = response.json().await.map_err(ApiError::from)?;
-            all_items.extend(items);
-
-            match next_page {
-                Some(page) => path = format!("{}?per_page=100&page={}", base, page),
-                None => break,
-            }
-        }
-
-        Ok(all_items)
+        let first_page = format!(
+            "/repos/{}/{}/issues/{}/comments?per_page=100",
+            owner, repo, pull_number
+        );
+        self.client.fetch_all_pages(&first_page).await
     }
 
     /// Add a conversation-thread comment to a pull request.
@@ -1020,7 +996,7 @@ impl PullRequestsClient {
         // PRs use the same label endpoint as issues
         let path = format!(
             "/repos/{}/{}/issues/{}/labels/{}",
-            owner, repo, pull_number, name
+            owner, repo, pull_number, urlencoding::encode(name)
         );
         let response = self.client.delete(&path).await?;
 

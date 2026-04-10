@@ -8,7 +8,7 @@
 
 use crate::{
     auth::InstallationId,
-    client::{calculate_rate_limit_delay, detect_secondary_rate_limit, GitHubClient},
+    client::{calculate_rate_limit_delay, detect_secondary_rate_limit, extract_page_number, parse_link_header, GitHubClient},
     error::ApiError,
 };
 use std::future::Future;
@@ -559,6 +559,59 @@ impl InstallationClient {
 }
 
 impl InstallationClient {
+    /// Auto-paginate a GET endpoint that returns `Vec<T>`.
+    ///
+    /// Drives pagination using the `Link: rel="next"` header (ADR-002).
+    /// `first_page_path` must be the full API path for the first request,
+    /// including any query parameters (e.g. `?per_page=100&state=open`).
+    /// Subsequent pages append `&page=N` to `first_page_path`.
+    pub(crate) async fn fetch_all_pages<T: serde::de::DeserializeOwned>(
+        &self,
+        first_page_path: &str,
+    ) -> Result<Vec<T>, ApiError> {
+        let mut all_items: Vec<T> = Vec::new();
+        let mut path = first_page_path.to_string();
+
+        loop {
+            let response = self.get(&path).await?;
+            let status = response.status();
+            if !status.is_success() {
+                let message = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
+                return Err(match status.as_u16() {
+                    401 => ApiError::AuthenticationFailed,
+                    403 => ApiError::AuthorizationFailed,
+                    404 => ApiError::NotFound,
+                    422 => ApiError::InvalidRequest { message },
+                    _ => ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    },
+                });
+            }
+
+            let next_page: Option<u32> = response
+                .headers()
+                .get("Link")
+                .and_then(|h| h.to_str().ok())
+                .and_then(|h| parse_link_header(Some(h)).next)
+                .as_deref()
+                .and_then(extract_page_number);
+
+            let items: Vec<T> = response.json().await.map_err(ApiError::from)?;
+            all_items.extend(items);
+
+            match next_page {
+                Some(page) => path = format!("{}&page={}", first_page_path, page),
+                None => break,
+            }
+        }
+
+        Ok(all_items)
+    }
+
     /// Access issue-domain operations.
     ///
     /// See docs/specs/interfaces/issue-operations.md; ADR-003.

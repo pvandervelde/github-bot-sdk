@@ -849,7 +849,7 @@ impl IssuesClient {
     ) -> Result<Vec<Label>, ApiError> {
         let path = format!(
             "/repos/{}/{}/issues/{}/labels/{}",
-            owner, repo, issue_number, label_name
+            owner, repo, issue_number, urlencoding::encode(label_name)
         );
         let response = self.client.delete(&path).await?;
         let status = response.status();
@@ -1195,35 +1195,8 @@ impl LabelsClient {
     /// # Errors
     /// * `ApiError::NotFound` — repository does not exist
     pub async fn list(&self, owner: &str, repo: &str) -> Result<Vec<Label>, ApiError> {
-        let base = format!("/repos/{}/{}/labels", owner, repo);
-        let mut all_items: Vec<Label> = Vec::new();
-        let mut path = format!("{}?per_page=100", base);
-
-        loop {
-            let response = self.client.get(&path).await?;
-            let status = response.status();
-            if !status.is_success() {
-                return Err(map_error(status, response).await);
-            }
-
-            let next_page: Option<u32> = response
-                .headers()
-                .get("Link")
-                .and_then(|h| h.to_str().ok())
-                .and_then(|h| parse_link_header(Some(h)).next)
-                .as_deref()
-                .and_then(extract_page_number);
-
-            let items: Vec<Label> = response.json().await.map_err(ApiError::from)?;
-            all_items.extend(items);
-
-            match next_page {
-                Some(page) => path = format!("{}?per_page=100&page={}", base, page),
-                None => break,
-            }
-        }
-
-        Ok(all_items)
+        let first_page = format!("/repos/{}/{}/labels?per_page=100", owner, repo);
+        self.client.fetch_all_pages(&first_page).await
     }
 
     /// Get a single label definition by name.
@@ -1231,7 +1204,7 @@ impl LabelsClient {
     /// # Errors
     /// * `ApiError::NotFound` — label does not exist
     pub async fn get(&self, owner: &str, repo: &str, name: &str) -> Result<Label, ApiError> {
-        let path = format!("/repos/{}/{}/labels/{}", owner, repo, name);
+        let path = format!("/repos/{}/{}/labels/{}", owner, repo, urlencoding::encode(name));
         let response = self.client.get(&path).await?;
         let status = response.status();
         if !status.is_success() {
@@ -1274,7 +1247,7 @@ impl LabelsClient {
         name: &str,
         request: UpdateLabelRequest,
     ) -> Result<Label, ApiError> {
-        let path = format!("/repos/{}/{}/labels/{}", owner, repo, name);
+        let path = format!("/repos/{}/{}/labels/{}", owner, repo, urlencoding::encode(name));
         let response = self.client.patch(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
@@ -1291,7 +1264,7 @@ impl LabelsClient {
     /// * `ApiError::NotFound` — label does not exist
     /// * `ApiError::AuthorizationFailed` — missing `issues: write`
     pub async fn delete(&self, owner: &str, repo: &str, name: &str) -> Result<(), ApiError> {
-        let path = format!("/repos/{}/{}/labels/{}", owner, repo, name);
+        let path = format!("/repos/{}/{}/labels/{}", owner, repo, urlencoding::encode(name));
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
@@ -1360,36 +1333,8 @@ impl MilestonesClient {
             }
         }
 
-        let mut all_items: Vec<Milestone> = Vec::new();
-        let mut path = format!("{}?{}", base, params.join("&"));
-
-        loop {
-            let response = self.client.get(&path).await?;
-            let status = response.status();
-            if !status.is_success() {
-                return Err(map_error(status, response).await);
-            }
-
-            let next_page: Option<u32> = response
-                .headers()
-                .get("Link")
-                .and_then(|h| h.to_str().ok())
-                .and_then(|h| parse_link_header(Some(h)).next)
-                .as_deref()
-                .and_then(extract_page_number);
-
-            let items: Vec<Milestone> = response.json().await.map_err(ApiError::from)?;
-            all_items.extend(items);
-
-            match next_page {
-                Some(page) => {
-                    path = format!("{}?{}&page={}", base, params.join("&"), page);
-                }
-                None => break,
-            }
-        }
-
-        Ok(all_items)
+        let first_page = format!("{}?{}", base, params.join("&"));
+        self.client.fetch_all_pages(&first_page).await
     }
 
     /// Get a single milestone by its repository-scoped number.

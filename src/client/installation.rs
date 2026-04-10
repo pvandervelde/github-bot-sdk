@@ -8,7 +8,10 @@
 
 use crate::{
     auth::InstallationId,
-    client::{calculate_rate_limit_delay, detect_secondary_rate_limit, extract_page_number, parse_link_header, GitHubClient},
+    client::{
+        calculate_rate_limit_delay, detect_secondary_rate_limit, extract_page_number,
+        parse_link_header, GitHubClient,
+    },
     error::ApiError,
 };
 use std::future::Future;

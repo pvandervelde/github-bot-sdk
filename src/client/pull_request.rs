@@ -996,7 +996,10 @@ impl PullRequestsClient {
         // PRs use the same label endpoint as issues
         let path = format!(
             "/repos/{}/{}/issues/{}/labels/{}",
-            owner, repo, pull_number, urlencoding::encode(name)
+            owner,
+            repo,
+            pull_number,
+            urlencoding::encode(name)
         );
         let response = self.client.delete(&path).await?;
 

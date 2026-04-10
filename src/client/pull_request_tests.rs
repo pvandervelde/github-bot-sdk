@@ -651,8 +651,7 @@ mod label_operations {
                 serde_json::json!({"labels": ["feature"]}),
             ))
             .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::json!([feature_label])),
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([feature_label])),
             )
             .mount(&mock_server)
             .await;

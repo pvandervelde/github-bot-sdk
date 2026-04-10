@@ -849,7 +849,10 @@ impl IssuesClient {
     ) -> Result<Vec<Label>, ApiError> {
         let path = format!(
             "/repos/{}/{}/issues/{}/labels/{}",
-            owner, repo, issue_number, urlencoding::encode(label_name)
+            owner,
+            repo,
+            issue_number,
+            urlencoding::encode(label_name)
         );
         let response = self.client.delete(&path).await?;
         let status = response.status();
@@ -1204,7 +1207,12 @@ impl LabelsClient {
     /// # Errors
     /// * `ApiError::NotFound` — label does not exist
     pub async fn get(&self, owner: &str, repo: &str, name: &str) -> Result<Label, ApiError> {
-        let path = format!("/repos/{}/{}/labels/{}", owner, repo, urlencoding::encode(name));
+        let path = format!(
+            "/repos/{}/{}/labels/{}",
+            owner,
+            repo,
+            urlencoding::encode(name)
+        );
         let response = self.client.get(&path).await?;
         let status = response.status();
         if !status.is_success() {
@@ -1247,7 +1255,12 @@ impl LabelsClient {
         name: &str,
         request: UpdateLabelRequest,
     ) -> Result<Label, ApiError> {
-        let path = format!("/repos/{}/{}/labels/{}", owner, repo, urlencoding::encode(name));
+        let path = format!(
+            "/repos/{}/{}/labels/{}",
+            owner,
+            repo,
+            urlencoding::encode(name)
+        );
         let response = self.client.patch(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
@@ -1264,7 +1277,12 @@ impl LabelsClient {
     /// * `ApiError::NotFound` — label does not exist
     /// * `ApiError::AuthorizationFailed` — missing `issues: write`
     pub async fn delete(&self, owner: &str, repo: &str, name: &str) -> Result<(), ApiError> {
-        let path = format!("/repos/{}/{}/labels/{}", owner, repo, urlencoding::encode(name));
+        let path = format!(
+            "/repos/{}/{}/labels/{}",
+            owner,
+            repo,
+            urlencoding::encode(name)
+        );
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {

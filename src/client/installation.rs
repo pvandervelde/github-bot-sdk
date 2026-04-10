@@ -8,7 +8,10 @@
 
 use crate::{
     auth::InstallationId,
-    client::{calculate_rate_limit_delay, detect_secondary_rate_limit, GitHubClient},
+    client::{
+        calculate_rate_limit_delay, detect_secondary_rate_limit, extract_page_number,
+        parse_link_header, GitHubClient,
+    },
     error::ApiError,
 };
 use std::future::Future;
@@ -528,6 +531,144 @@ impl InstallationClient {
                 .map_err(ApiError::HttpClientError)
         })
         .await
+    }
+
+    /// Make an authenticated DELETE request with a JSON body to the GitHub API.
+    ///
+    /// Used for endpoints that require a body on DELETE (e.g. remove assignees).
+    pub async fn delete_with_body<T: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &T,
+    ) -> Result<reqwest::Response, ApiError> {
+        let path = path.to_string();
+        let body_json = serde_json::to_value(body).map_err(ApiError::JsonError)?;
+
+        self.execute_with_retry("DELETE", || async {
+            let (token, url) = self.prepare_request(&path, "DELETE").await?;
+
+            self.client
+                .http_client()
+                .delete(&url)
+                .header("Authorization", format!("Bearer {}", token))
+                .header("Accept", "application/vnd.github+json")
+                .json(&body_json)
+                .send()
+                .await
+                .map_err(ApiError::HttpClientError)
+        })
+        .await
+    }
+}
+
+impl InstallationClient {
+    /// Auto-paginate a GET endpoint that returns `Vec<T>`.
+    ///
+    /// Drives pagination using the `Link: rel="next"` header (ADR-002).
+    /// `first_page_path` must be the full API path for the first request,
+    /// including any query parameters (e.g. `?per_page=100&state=open`).
+    /// Subsequent pages append `&page=N` to `first_page_path`.
+    pub(crate) async fn fetch_all_pages<T: serde::de::DeserializeOwned>(
+        &self,
+        first_page_path: &str,
+    ) -> Result<Vec<T>, ApiError> {
+        let mut all_items: Vec<T> = Vec::new();
+        let mut path = first_page_path.to_string();
+
+        loop {
+            let response = self.get(&path).await?;
+            let status = response.status();
+            if !status.is_success() {
+                let message = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
+                return Err(match status.as_u16() {
+                    401 => ApiError::AuthenticationFailed,
+                    403 => ApiError::AuthorizationFailed,
+                    404 => ApiError::NotFound,
+                    422 => ApiError::InvalidRequest { message },
+                    _ => ApiError::HttpError {
+                        status: status.as_u16(),
+                        message,
+                    },
+                });
+            }
+
+            let next_page: Option<u32> = response
+                .headers()
+                .get("Link")
+                .and_then(|h| h.to_str().ok())
+                .and_then(|h| parse_link_header(Some(h)).next)
+                .as_deref()
+                .and_then(extract_page_number);
+
+            let items: Vec<T> = response.json().await.map_err(ApiError::from)?;
+            all_items.extend(items);
+
+            match next_page {
+                Some(page) => path = format!("{}&page={}", first_page_path, page),
+                None => break,
+            }
+        }
+
+        Ok(all_items)
+    }
+
+    /// Access issue-domain operations.
+    ///
+    /// See docs/specs/interfaces/issue-operations.md; ADR-003.
+    pub fn issues(&self) -> crate::client::issue::IssuesClient {
+        crate::client::issue::IssuesClient::new(self.clone())
+    }
+
+    /// Access pull request operations, reviews, and inline comments.
+    ///
+    /// See docs/specs/interfaces/pull-request-operations.md; ADR-003.
+    pub fn pull_requests(&self) -> crate::client::pull_request::PullRequestsClient {
+        crate::client::pull_request::PullRequestsClient::new(self.clone())
+    }
+
+    /// Access repository-level label catalogue operations.
+    ///
+    /// See docs/specs/interfaces/labels-client.md; ADR-003.
+    pub fn labels(&self) -> crate::client::issue::LabelsClient {
+        crate::client::issue::LabelsClient::new(self.clone())
+    }
+
+    /// Access milestone CRUD operations.
+    ///
+    /// See docs/specs/interfaces/milestones-client.md; ADR-003.
+    pub fn milestones(&self) -> crate::client::issue::MilestonesClient {
+        crate::client::issue::MilestonesClient::new(self.clone())
+    }
+
+    /// Access repository, branch, tag, git-ref, and commit operations.
+    ///
+    /// See docs/specs/interfaces/repository-operations.md; ADR-003.
+    pub fn repositories(&self) -> crate::client::repository::RepositoriesClient {
+        crate::client::repository::RepositoriesClient::new(self.clone())
+    }
+
+    /// Access GitHub Actions workflow and run operations.
+    ///
+    /// See docs/specs/interfaces/additional-operations.md; ADR-003.
+    pub fn workflows(&self) -> crate::client::workflow::WorkflowsClient {
+        crate::client::workflow::WorkflowsClient::new(self.clone())
+    }
+
+    /// Access release CRUD operations.
+    ///
+    /// See docs/specs/interfaces/additional-operations.md; ADR-003.
+    pub fn releases(&self) -> crate::client::release::ReleasesClient {
+        crate::client::release::ReleasesClient::new(self.clone())
+    }
+
+    /// Access GitHub Projects V2 operations.
+    ///
+    /// See docs/specs/interfaces/project-operations.md; ADR-003.
+    pub fn projects(&self) -> crate::client::project::ProjectsClient {
+        crate::client::project::ProjectsClient::new(self.clone())
     }
 }
 

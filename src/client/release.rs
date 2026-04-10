@@ -1,4 +1,5 @@
-// Release and release asset operations for GitHub API
+// Spec: docs/specs/interfaces/additional-operations.md
+// Release operations for GitHub API
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -178,10 +179,20 @@ pub struct UpdateReleaseRequest {
     pub prerelease: Option<bool>,
 }
 
-impl InstallationClient {
-    // ========================================================================
-    // Release Operations
-    // ========================================================================
+/// Domain client for release operations.
+///
+/// Obtained via [`InstallationClient::releases()`]. Cheap to clone (Arc-backed).
+///
+/// See docs/specs/interfaces/additional-operations.md
+#[derive(Debug, Clone)]
+pub struct ReleasesClient {
+    client: InstallationClient,
+}
+
+impl ReleasesClient {
+    pub(crate) fn new(client: InstallationClient) -> Self {
+        Self { client }
+    }
 
     /// List releases in a repository.
     ///
@@ -204,18 +215,18 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let releases = client.list_releases("owner", "repo").await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let releases = client.list("owner", "repo").await?;
     /// for release in releases {
     ///     println!("Release: {} ({})", release.name.unwrap_or_default(), release.tag_name);
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_releases(&self, owner: &str, repo: &str) -> Result<Vec<Release>, ApiError> {
+    pub async fn list(&self, owner: &str, repo: &str) -> Result<Vec<Release>, ApiError> {
         let path = format!("/repos/{}/{}/releases", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -260,16 +271,16 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let release = client.get_latest_release("owner", "repo").await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get_latest("owner", "repo").await?;
     /// println!("Latest: {} ({})", release.name.unwrap_or_default(), release.tag_name);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_latest_release(&self, owner: &str, repo: &str) -> Result<Release, ApiError> {
+    pub async fn get_latest(&self, owner: &str, repo: &str) -> Result<Release, ApiError> {
         let path = format!("/repos/{}/{}/releases/latest", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -315,14 +326,14 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let release = client.get_release_by_tag("owner", "repo", "v1.0.0").await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get_by_tag("owner", "repo", "v1.0.0").await?;
     /// println!("Release: {}", release.tag_name);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_release_by_tag(
+    pub async fn get_by_tag(
         &self,
         owner: &str,
         repo: &str,
@@ -330,7 +341,7 @@ impl InstallationClient {
     ) -> Result<Release, ApiError> {
         let encoded_tag = urlencoding::encode(tag);
         let path = format!("/repos/{}/{}/releases/tags/{}", owner, repo, encoded_tag);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -376,21 +387,16 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let release = client.get_release("owner", "repo", 12345).await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let release = client.get("owner", "repo", 12345).await?;
     /// println!("Release: {}", release.tag_name);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_release(
-        &self,
-        owner: &str,
-        repo: &str,
-        release_id: u64,
-    ) -> Result<Release, ApiError> {
+    pub async fn get(&self, owner: &str, repo: &str, release_id: u64) -> Result<Release, ApiError> {
         let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -437,8 +443,8 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::{InstallationClient, CreateReleaseRequest};
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::{ReleasesClient, CreateReleaseRequest};
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let request = CreateReleaseRequest {
     ///     tag_name: "v1.0.0".to_string(),
     ///     name: Some("Version 1.0.0".to_string()),
@@ -448,19 +454,19 @@ impl InstallationClient {
     ///     target_commitish: None,
     ///     generate_release_notes: None,
     /// };
-    /// let release = client.create_release("owner", "repo", request).await?;
+    /// let release = client.create("owner", "repo", request).await?;
     /// println!("Created release: {}", release.tag_name);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn create_release(
+    pub async fn create(
         &self,
         owner: &str,
         repo: &str,
         request: CreateReleaseRequest,
     ) -> Result<Release, ApiError> {
         let path = format!("/repos/{}/{}/releases", owner, repo);
-        let response = self.post(&path, &request).await?;
+        let response = self.client.post(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -515,19 +521,19 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::{InstallationClient, UpdateReleaseRequest};
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::{ReleasesClient, UpdateReleaseRequest};
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let request = UpdateReleaseRequest {
     ///     name: Some("Updated name".to_string()),
     ///     body: Some("Updated notes".to_string()),
     ///     ..Default::default()
     /// };
-    /// let release = client.update_release("owner", "repo", 12345, request).await?;
+    /// let release = client.update("owner", "repo", 12345, request).await?;
     /// println!("Updated release: {}", release.tag_name);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn update_release(
+    pub async fn update(
         &self,
         owner: &str,
         repo: &str,
@@ -535,7 +541,7 @@ impl InstallationClient {
         request: UpdateReleaseRequest,
     ) -> Result<Release, ApiError> {
         let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
-        let response = self.patch(&path, &request).await?;
+        let response = self.client.patch(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -588,21 +594,16 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.delete_release("owner", "repo", 12345).await?;
+    /// # use github_bot_sdk::client::ReleasesClient;
+    /// # async fn example(client: &ReleasesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.delete("owner", "repo", 12345).await?;
     /// println!("Release deleted");
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_release(
-        &self,
-        owner: &str,
-        repo: &str,
-        release_id: u64,
-    ) -> Result<(), ApiError> {
+    pub async fn delete(&self, owner: &str, repo: &str, release_id: u64) -> Result<(), ApiError> {
         let path = format!("/repos/{}/{}/releases/{}", owner, repo, release_id);
-        let response = self.delete(&path).await?;
+        let response = self.client.delete(&path).await?;
 
         let status = response.status();
         if !status.is_success() {

@@ -1,3 +1,4 @@
+// Spec: docs/specs/interfaces/additional-operations.md
 // Workflow and workflow run operations for GitHub API
 
 use chrono::{DateTime, Utc};
@@ -98,10 +99,20 @@ pub struct TriggerWorkflowRequest {
     pub inputs: Option<std::collections::HashMap<String, String>>,
 }
 
-impl InstallationClient {
-    // ========================================================================
-    // Workflow Operations
-    // ========================================================================
+/// Domain client for GitHub Actions workflow and run operations.
+///
+/// Obtained via [`InstallationClient::workflows()`]. Cheap to clone (Arc-backed).
+///
+/// See docs/specs/interfaces/additional-operations.md
+#[derive(Debug, Clone)]
+pub struct WorkflowsClient {
+    client: InstallationClient,
+}
+
+impl WorkflowsClient {
+    pub(crate) fn new(client: InstallationClient) -> Self {
+        Self { client }
+    }
 
     /// List workflows in a repository.
     ///
@@ -124,18 +135,18 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let workflows = client.list_workflows("owner", "repo").await?;
+    /// # use github_bot_sdk::client::WorkflowsClient;
+    /// # async fn example(client: &WorkflowsClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let workflows = client.list("owner", "repo").await?;
     /// for workflow in workflows {
     ///     println!("Workflow: {} ({})", workflow.name, workflow.state);
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_workflows(&self, owner: &str, repo: &str) -> Result<Vec<Workflow>, ApiError> {
+    pub async fn list(&self, owner: &str, repo: &str) -> Result<Vec<Workflow>, ApiError> {
         let path = format!("/repos/{}/{}/actions/workflows", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -188,14 +199,14 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let workflow = client.get_workflow("owner", "repo", 123456).await?;
+    /// # use github_bot_sdk::client::WorkflowsClient;
+    /// # async fn example(client: &WorkflowsClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let workflow = client.get("owner", "repo", 123456).await?;
     /// println!("Workflow: {} at {}", workflow.name, workflow.path);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_workflow(
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
@@ -205,7 +216,7 @@ impl InstallationClient {
             "/repos/{}/{}/actions/workflows/{}",
             owner, repo, workflow_id
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -253,18 +264,18 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::{InstallationClient, TriggerWorkflowRequest};
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::{WorkflowsClient, TriggerWorkflowRequest};
+    /// # async fn example(client: &WorkflowsClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let request = TriggerWorkflowRequest {
     ///     git_ref: "main".to_string(),
     ///     inputs: None,
     /// };
-    /// client.trigger_workflow("owner", "repo", 123456, request).await?;
+    /// client.trigger("owner", "repo", 123456, request).await?;
     /// println!("Workflow triggered");
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn trigger_workflow(
+    pub async fn trigger(
         &self,
         owner: &str,
         repo: &str,
@@ -275,7 +286,7 @@ impl InstallationClient {
             "/repos/{}/{}/actions/workflows/{}/dispatches",
             owner, repo, workflow_id
         );
-        let response = self.post(&path, &request).await?;
+        let response = self.client.post(&path, &request).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -332,16 +343,16 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let runs = client.list_workflow_runs("owner", "repo", 123456).await?;
+    /// # use github_bot_sdk::client::WorkflowsClient;
+    /// # async fn example(client: &WorkflowsClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let runs = client.list_runs("owner", "repo", 123456).await?;
     /// for run in runs {
     ///     println!("Run #{}: {} ({})", run.run_number, run.status, run.conclusion.unwrap_or_default());
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_workflow_runs(
+    pub async fn list_runs(
         &self,
         owner: &str,
         repo: &str,
@@ -351,7 +362,7 @@ impl InstallationClient {
             "/repos/{}/{}/actions/workflows/{}/runs",
             owner, repo, workflow_id
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -403,21 +414,21 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let run = client.get_workflow_run("owner", "repo", 987654).await?;
+    /// # use github_bot_sdk::client::WorkflowsClient;
+    /// # async fn example(client: &WorkflowsClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let run = client.get_run("owner", "repo", 987654).await?;
     /// println!("Run #{}: {}", run.run_number, run.status);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_workflow_run(
+    pub async fn get_run(
         &self,
         owner: &str,
         repo: &str,
         run_id: u64,
     ) -> Result<WorkflowRun, ApiError> {
         let path = format!("/repos/{}/{}/actions/runs/{}", owner, repo, run_id);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -464,21 +475,16 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.cancel_workflow_run("owner", "repo", 987654).await?;
+    /// # use github_bot_sdk::client::WorkflowsClient;
+    /// # async fn example(client: &WorkflowsClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.cancel_run("owner", "repo", 987654).await?;
     /// println!("Workflow run cancelled");
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn cancel_workflow_run(
-        &self,
-        owner: &str,
-        repo: &str,
-        run_id: u64,
-    ) -> Result<(), ApiError> {
+    pub async fn cancel_run(&self, owner: &str, repo: &str, run_id: u64) -> Result<(), ApiError> {
         let path = format!("/repos/{}/{}/actions/runs/{}/cancel", owner, repo, run_id);
-        let response = self.post(&path, &serde_json::json!({})).await?;
+        let response = self.client.post(&path, &serde_json::json!({})).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -532,21 +538,16 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.rerun_workflow_run("owner", "repo", 987654).await?;
+    /// # use github_bot_sdk::client::WorkflowsClient;
+    /// # async fn example(client: &WorkflowsClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.rerun_run("owner", "repo", 987654).await?;
     /// println!("Workflow run re-triggered");
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn rerun_workflow_run(
-        &self,
-        owner: &str,
-        repo: &str,
-        run_id: u64,
-    ) -> Result<(), ApiError> {
+    pub async fn rerun_run(&self, owner: &str, repo: &str, run_id: u64) -> Result<(), ApiError> {
         let path = format!("/repos/{}/{}/actions/runs/{}/rerun", owner, repo, run_id);
-        let response = self.post(&path, &serde_json::json!({})).await?;
+        let response = self.client.post(&path, &serde_json::json!({})).await?;
 
         let status = response.status();
         if !status.is_success() {

@@ -248,7 +248,8 @@ mod pull_request_operations {
             .unwrap();
 
         let response = client
-            .list_pull_requests("owner", "repo", None, None)
+            .pull_requests()
+            .list("owner", "repo", None, None)
             .await
             .unwrap();
 
@@ -325,7 +326,11 @@ mod pull_request_operations {
             .await
             .unwrap();
 
-        let pr = client.get_pull_request("owner", "repo", 42).await.unwrap();
+        let pr = client
+            .pull_requests()
+            .get("owner", "repo", 42)
+            .await
+            .unwrap();
 
         assert_eq!(pr.number, 42);
         assert_eq!(pr.title, "Test PR");
@@ -354,7 +359,7 @@ mod pull_request_operations {
             .await
             .unwrap();
 
-        let result = client.get_pull_request("owner", "repo", 999).await;
+        let result = client.pull_requests().get("owner", "repo", 999).await;
 
         assert!(matches!(result, Err(ApiError::NotFound)));
     }
@@ -437,11 +442,306 @@ mod pull_request_operations {
         };
 
         let pr = client
-            .create_pull_request("owner", "repo", request)
+            .pull_requests()
+            .create("owner", "repo", request)
             .await
             .unwrap();
 
         assert_eq!(pr.number, 42);
         assert_eq!(pr.title, "New Feature");
+    }
+}
+
+mod comment_operations {
+    use super::*;
+
+    /// Verify update_comment patches an existing pull request comment and returns it.
+    ///
+    /// Tests PATCH /repos/{owner}/{repo}/issues/comments/{id} endpoint.
+    #[tokio::test]
+    async fn test_update_comment() {
+        let mock_server = MockServer::start().await;
+
+        let updated_comment_json = serde_json::json!({
+            "id": 1,
+            "node_id": "MDEyOklzc3VlQ29tbWVudDE=",
+            "body": "Updated comment",
+            "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+            "created_at": "2011-04-14T16:00:49Z",
+            "updated_at": "2011-04-14T17:00:49Z",
+            "html_url": "https://github.com/octocat/Hello-World/pull/1#issuecomment-1"
+        });
+
+        Mock::given(method("PATCH"))
+            .and(path("/repos/octocat/Hello-World/issues/comments/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(updated_comment_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let request = UpdatePullRequestCommentRequest {
+            body: "Updated comment".to_string(),
+        };
+
+        let result = client
+            .pull_requests()
+            .update_comment("octocat", "Hello-World", 1, request)
+            .await;
+
+        assert!(result.is_ok());
+        let comment = result.unwrap();
+        assert_eq!(comment.id, 1);
+        assert_eq!(comment.body, "Updated comment");
+    }
+
+    /// Verify delete_comment removes a pull request comment.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/issues/comments/{id} endpoint.
+    #[tokio::test]
+    async fn test_delete_comment() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/repos/octocat/Hello-World/issues/comments/1"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .pull_requests()
+            .delete_comment("octocat", "Hello-World", 1)
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    /// Verify update_comment returns NotFound for a non-existent comment.
+    ///
+    /// Tests PATCH /repos/{owner}/{repo}/issues/comments/{id} returning 404.
+    #[tokio::test]
+    async fn test_update_comment_not_found() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("PATCH"))
+            .and(path("/repos/octocat/Hello-World/issues/comments/999"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found",
+                "documentation_url": "https://docs.github.com/rest/issues/comments#update-an-issue-comment"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let request = UpdatePullRequestCommentRequest {
+            body: "text".to_string(),
+        };
+
+        let result = client
+            .pull_requests()
+            .update_comment("octocat", "Hello-World", 999, request)
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound));
+    }
+}
+
+mod label_operations {
+    use super::*;
+
+    fn label_json() -> serde_json::Value {
+        serde_json::json!({
+            "id": 1,
+            "node_id": "MDU6TGFiZWwx",
+            "name": "bug",
+            "description": "Something isn't working",
+            "color": "d73a4a",
+            "default": true
+        })
+    }
+
+    /// Verify add_labels sends correct JSON object body and returns labels.
+    ///
+    /// Tests POST /repos/{owner}/{repo}/issues/{number}/labels with {"labels":[…]} body.
+    #[tokio::test]
+    async fn test_add_labels() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path("/repos/octocat/Hello-World/issues/42/labels"))
+            .and(wiremock::matchers::body_json(
+                serde_json::json!({"labels": ["bug"]}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([label_json()])),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .pull_requests()
+            .add_labels("octocat", "Hello-World", 42, vec!["bug".to_string()])
+            .await;
+
+        assert!(result.is_ok());
+        let labels = result.unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    /// Verify replace_labels sends a PUT request with correct JSON body.
+    ///
+    /// Tests PUT /repos/{owner}/{repo}/issues/{number}/labels with {"labels":[…]} body.
+    #[tokio::test]
+    async fn test_replace_labels() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let feature_label = serde_json::json!({
+            "id": 2,
+            "node_id": "MDU6TGFiZWwy",
+            "name": "feature",
+            "description": "New feature",
+            "color": "0075ca",
+            "default": false
+        });
+
+        Mock::given(method("PUT"))
+            .and(path("/repos/octocat/Hello-World/issues/42/labels"))
+            .and(wiremock::matchers::body_json(
+                serde_json::json!({"labels": ["feature"]}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([feature_label])),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .pull_requests()
+            .replace_labels("octocat", "Hello-World", 42, vec!["feature".to_string()])
+            .await;
+
+        assert!(result.is_ok());
+        let labels = result.unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "feature");
+    }
+
+    /// Verify replace_labels with empty vec clears all labels.
+    ///
+    /// Tests PUT /repos/{owner}/{repo}/issues/{number}/labels with {"labels":[]} body.
+    #[tokio::test]
+    async fn test_replace_labels_clears_all() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("PUT"))
+            .and(path("/repos/octocat/Hello-World/issues/42/labels"))
+            .and(wiremock::matchers::body_json(
+                serde_json::json!({"labels": []}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .pull_requests()
+            .replace_labels("octocat", "Hello-World", 42, vec![])
+            .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    /// Verify remove_label sends a DELETE request to the correct endpoint.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/issues/{number}/labels/{name}.
+    #[tokio::test]
+    async fn test_remove_label() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("DELETE"))
+            .and(path("/repos/octocat/Hello-World/issues/42/labels/bug"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .pull_requests()
+            .remove_label("octocat", "Hello-World", 42, "bug")
+            .await;
+
+        assert!(result.is_ok());
     }
 }

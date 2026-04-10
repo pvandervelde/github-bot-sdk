@@ -143,7 +143,8 @@ mod issue_operations {
             .unwrap();
 
         let result = client
-            .list_issues("octocat", "Hello-World", None, None)
+            .issues()
+            .list("octocat", "Hello-World", None, None)
             .await;
 
         assert!(result.is_ok());
@@ -180,7 +181,8 @@ mod issue_operations {
             .unwrap();
 
         let result = client
-            .list_issues("octocat", "Hello-World", Some("open"), None)
+            .issues()
+            .list("octocat", "Hello-World", Some("open"), None)
             .await;
 
         assert!(result.is_ok());
@@ -234,7 +236,7 @@ mod issue_operations {
             .await
             .unwrap();
 
-        let result = client.get_issue("octocat", "Hello-World", 1347).await;
+        let result = client.issues().get("octocat", "Hello-World", 1347).await;
 
         assert!(result.is_ok());
         let issue = result.unwrap();
@@ -267,7 +269,7 @@ mod issue_operations {
             .await
             .unwrap();
 
-        let result = client.get_issue("octocat", "Hello-World", 9999).await;
+        let result = client.issues().get("octocat", "Hello-World", 9999).await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::NotFound));
@@ -329,7 +331,10 @@ mod issue_operations {
             labels: None,
         };
 
-        let result = client.create_issue("octocat", "Hello-World", request).await;
+        let result = client
+            .issues()
+            .create("octocat", "Hello-World", request)
+            .await;
 
         assert!(result.is_ok());
         let issue = result.unwrap();
@@ -403,7 +408,10 @@ mod issue_operations {
             labels: Some(vec!["bug".to_string()]),
         };
 
-        let result = client.create_issue("octocat", "Hello-World", request).await;
+        let result = client
+            .issues()
+            .create("octocat", "Hello-World", request)
+            .await;
 
         assert!(result.is_ok());
         let issue = result.unwrap();
@@ -468,7 +476,8 @@ mod issue_operations {
         };
 
         let result = client
-            .update_issue("octocat", "Hello-World", 1347, request)
+            .issues()
+            .update("octocat", "Hello-World", 1347, request)
             .await;
 
         assert!(result.is_ok());
@@ -539,7 +548,8 @@ mod issue_operations {
             .unwrap();
 
         let result = client
-            .set_issue_milestone("octocat", "Hello-World", 1347, Some(1))
+            .issues()
+            .set_milestone("octocat", "Hello-World", 1347, Some(1))
             .await;
 
         assert!(result.is_ok());
@@ -597,7 +607,8 @@ mod issue_operations {
             .unwrap();
 
         let result = client
-            .set_issue_milestone("octocat", "Hello-World", 1347, None)
+            .issues()
+            .set_milestone("octocat", "Hello-World", 1347, None)
             .await;
 
         assert!(result.is_ok());
@@ -654,7 +665,7 @@ mod label_operations {
             .await
             .unwrap();
 
-        let result = client.list_labels("octocat", "Hello-World").await;
+        let result = client.labels().list("octocat", "Hello-World").await;
 
         assert!(result.is_ok());
         let labels = result.unwrap();
@@ -697,7 +708,7 @@ mod label_operations {
             .await
             .unwrap();
 
-        let result = client.get_label("octocat", "Hello-World", "bug").await;
+        let result = client.labels().get("octocat", "Hello-World", "bug").await;
 
         assert!(result.is_ok());
         let label = result.unwrap();
@@ -731,7 +742,8 @@ mod label_operations {
             .unwrap();
 
         let result = client
-            .get_label("octocat", "Hello-World", "nonexistent")
+            .labels()
+            .get("octocat", "Hello-World", "nonexistent")
             .await;
 
         assert!(result.is_err());
@@ -778,7 +790,10 @@ mod label_operations {
             color: "ff0000".to_string(),
         };
 
-        let result = client.create_label("octocat", "Hello-World", request).await;
+        let result = client
+            .labels()
+            .create("octocat", "Hello-World", request)
+            .await;
 
         assert!(result.is_ok());
         let label = result.unwrap();
@@ -827,7 +842,8 @@ mod label_operations {
         };
 
         let result = client
-            .update_label("octocat", "Hello-World", "bug", request)
+            .labels()
+            .update("octocat", "Hello-World", "bug", request)
             .await;
 
         assert!(result.is_ok());
@@ -862,7 +878,8 @@ mod label_operations {
             .unwrap();
 
         let result = client
-            .delete_label("octocat", "Hello-World", "deprecated")
+            .labels()
+            .delete("octocat", "Hello-World", "deprecated")
             .await;
 
         assert!(result.is_ok());
@@ -915,7 +932,8 @@ mod label_operations {
         let labels = vec!["bug".to_string(), "high-priority".to_string()];
 
         let result = client
-            .add_labels_to_issue("octocat", "Hello-World", 1347, labels)
+            .issues()
+            .add_labels("octocat", "Hello-World", 1347, labels)
             .await;
 
         assert!(result.is_ok());
@@ -964,7 +982,8 @@ mod label_operations {
             .unwrap();
 
         let result = client
-            .remove_label_from_issue("octocat", "Hello-World", 1347, "high-priority")
+            .issues()
+            .remove_label("octocat", "Hello-World", 1347, "high-priority")
             .await;
 
         assert!(result.is_ok());
@@ -1035,7 +1054,8 @@ mod comment_operations {
             .unwrap();
 
         let result = client
-            .list_issue_comments("octocat", "Hello-World", 1347)
+            .issues()
+            .list_comments("octocat", "Hello-World", 1347)
             .await;
 
         assert!(result.is_ok());
@@ -1086,7 +1106,10 @@ mod comment_operations {
             .await
             .unwrap();
 
-        let result = client.get_issue_comment("octocat", "Hello-World", 1).await;
+        let result = client
+            .issues()
+            .get_comment("octocat", "Hello-World", 1)
+            .await;
 
         assert!(result.is_ok());
         let comment = result.unwrap();
@@ -1120,7 +1143,8 @@ mod comment_operations {
             .unwrap();
 
         let result = client
-            .get_issue_comment("octocat", "Hello-World", 9999)
+            .issues()
+            .get_comment("octocat", "Hello-World", 9999)
             .await;
 
         assert!(result.is_err());
@@ -1172,7 +1196,8 @@ mod comment_operations {
         };
 
         let result = client
-            .create_issue_comment("octocat", "Hello-World", 1347, request)
+            .issues()
+            .create_comment("octocat", "Hello-World", 1347, request)
             .await;
 
         assert!(result.is_ok());
@@ -1226,7 +1251,8 @@ mod comment_operations {
         };
 
         let result = client
-            .update_issue_comment("octocat", "Hello-World", 1, request)
+            .issues()
+            .update_comment("octocat", "Hello-World", 1, request)
             .await;
 
         assert!(result.is_ok());
@@ -1260,7 +1286,8 @@ mod comment_operations {
             .unwrap();
 
         let result = client
-            .delete_issue_comment("octocat", "Hello-World", 1)
+            .issues()
+            .delete_comment("octocat", "Hello-World", 1)
             .await;
 
         assert!(result.is_ok());
@@ -1443,7 +1470,7 @@ mod serialization {
             milestone.description,
             Some("Tracking milestone for version 1.0".to_string())
         );
-        assert_eq!(milestone.state, "open");
+        assert!(matches!(milestone.state, MilestoneState::Open));
         assert_eq!(milestone.open_issues, 4);
         assert_eq!(milestone.closed_issues, 8);
         assert!(milestone.due_on.is_some());
@@ -1523,7 +1550,7 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_issue("owner", "repo", 999).await;
+        let result = client.issues().get("owner", "repo", 999).await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::NotFound));
@@ -1555,7 +1582,7 @@ mod error_handling {
             .await
             .unwrap();
 
-        let result = client.get_issue("owner", "private-repo", 1).await;
+        let result = client.issues().get("owner", "private-repo", 1).await;
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ApiError::AuthorizationFailed));
@@ -1602,7 +1629,7 @@ mod error_handling {
             labels: None,
         };
 
-        let result = client.create_issue("owner", "repo", request).await;
+        let result = client.issues().create("owner", "repo", request).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -1612,5 +1639,975 @@ mod error_handling {
             }
             _ => panic!("Expected InvalidRequest error, got: {:?}", error),
         }
+    }
+}
+
+mod reaction_operations {
+    use super::*;
+
+    /// Verify list_reactions returns all reactions on an issue.
+    ///
+    /// Tests GET /repos/{owner}/{repo}/issues/{number}/reactions endpoint.
+    #[tokio::test]
+    async fn test_list_reactions() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let reactions_json = serde_json::json!([
+            {
+                "id": 1,
+                "node_id": "MDg6UmVhY3Rpb24x",
+                "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+                "content": "+1",
+                "created_at": "2016-05-20T20:09:31Z"
+            },
+            {
+                "id": 2,
+                "node_id": "MDg6UmVhY3Rpb24y",
+                "user": {"login": "hubot", "id": 2, "node_id": "MDQ6VXNlcjI=", "type": "Bot"},
+                "content": "laugh",
+                "created_at": "2016-05-20T20:09:32Z"
+            }
+        ]);
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/reactions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(reactions_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .list_reactions("octocat", "Hello-World", 1347)
+            .await;
+
+        assert!(result.is_ok());
+        let reactions = result.unwrap();
+        assert_eq!(reactions.len(), 2);
+        assert_eq!(reactions[0].id, 1);
+        assert!(matches!(reactions[0].content, ReactionContent::PlusOne));
+    }
+
+    /// Verify create_reaction adds a reaction to an issue and returns it.
+    ///
+    /// Tests POST /repos/{owner}/{repo}/issues/{number}/reactions endpoint.
+    #[tokio::test]
+    async fn test_create_reaction() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let reaction_json = serde_json::json!({
+            "id": 1,
+            "node_id": "MDg6UmVhY3Rpb24x",
+            "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+            "content": "+1",
+            "created_at": "2016-05-20T20:09:31Z"
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/reactions"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(reaction_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .create_reaction("octocat", "Hello-World", 1347, ReactionContent::PlusOne)
+            .await;
+
+        assert!(result.is_ok());
+        let reaction = result.unwrap();
+        assert_eq!(reaction.id, 1);
+        assert!(matches!(reaction.content, ReactionContent::PlusOne));
+    }
+
+    /// Verify delete_reaction removes a reaction from an issue.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/issues/{number}/reactions/{id} endpoint.
+    #[tokio::test]
+    async fn test_delete_reaction() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("DELETE"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/reactions/1"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .delete_reaction("octocat", "Hello-World", 1347, 1)
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    /// Verify list_comment_reactions returns all reactions on an issue comment.
+    ///
+    /// Tests GET /repos/{owner}/{repo}/issues/comments/{id}/reactions endpoint.
+    #[tokio::test]
+    async fn test_list_comment_reactions() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let reactions_json = serde_json::json!([
+            {
+                "id": 3,
+                "node_id": "MDg6UmVhY3Rpb24z",
+                "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+                "content": "heart",
+                "created_at": "2016-05-20T20:09:33Z"
+            }
+        ]);
+
+        Mock::given(method("GET"))
+            .and(path(
+                "/repos/octocat/Hello-World/issues/comments/42/reactions",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(reactions_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .list_comment_reactions("octocat", "Hello-World", 42)
+            .await;
+
+        assert!(result.is_ok());
+        let reactions = result.unwrap();
+        assert_eq!(reactions.len(), 1);
+        assert!(matches!(reactions[0].content, ReactionContent::Heart));
+    }
+
+    /// Verify create_comment_reaction adds a reaction to an issue comment.
+    ///
+    /// Tests POST /repos/{owner}/{repo}/issues/comments/{id}/reactions endpoint.
+    #[tokio::test]
+    async fn test_create_comment_reaction() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let reaction_json = serde_json::json!({
+            "id": 3,
+            "node_id": "MDg6UmVhY3Rpb24z",
+            "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+            "content": "heart",
+            "created_at": "2016-05-20T20:09:33Z"
+        });
+
+        Mock::given(method("POST"))
+            .and(path(
+                "/repos/octocat/Hello-World/issues/comments/42/reactions",
+            ))
+            .respond_with(ResponseTemplate::new(201).set_body_json(reaction_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .create_comment_reaction("octocat", "Hello-World", 42, ReactionContent::Heart)
+            .await;
+
+        assert!(result.is_ok());
+        let reaction = result.unwrap();
+        assert_eq!(reaction.id, 3);
+        assert!(matches!(reaction.content, ReactionContent::Heart));
+    }
+
+    /// Verify delete_comment_reaction removes a reaction from an issue comment.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/issues/comments/{id}/reactions/{reaction_id} endpoint.
+    #[tokio::test]
+    async fn test_delete_comment_reaction() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("DELETE"))
+            .and(path(
+                "/repos/octocat/Hello-World/issues/comments/42/reactions/3",
+            ))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .delete_comment_reaction("octocat", "Hello-World", 42, 3)
+            .await;
+
+        assert!(result.is_ok());
+    }
+}
+
+mod assignee_operations {
+    use super::*;
+
+    /// Verify list_available_assignees returns users eligible to be assigned in the repository.
+    ///
+    /// Tests GET /repos/{owner}/{repo}/assignees endpoint.
+    #[tokio::test]
+    async fn test_list_available_assignees() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let assignees_json = serde_json::json!([
+            {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+            {"login": "hubot", "id": 2, "node_id": "MDQ6VXNlcjI=", "type": "Bot"}
+        ]);
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/assignees"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(assignees_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .list_available_assignees("octocat", "Hello-World")
+            .await;
+
+        assert!(result.is_ok());
+        let assignees = result.unwrap();
+        assert_eq!(assignees.len(), 2);
+        assert_eq!(assignees[0].login, "octocat");
+    }
+
+    /// Verify add_assignees assigns users to an issue and returns the updated issue.
+    ///
+    /// Tests POST /repos/{owner}/{repo}/issues/{number}/assignees endpoint.
+    #[tokio::test]
+    async fn test_add_assignees() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let issue_json = serde_json::json!({
+            "id": 1,
+            "node_id": "MDU6SXNzdWUx",
+            "number": 1347,
+            "title": "Found a bug",
+            "body": "I'm having a problem with this.",
+            "state": "open",
+            "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+            "labels": [],
+            "assignees": [
+                {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"}
+            ],
+            "milestone": null,
+            "comments": 0,
+            "created_at": "2011-04-22T13:33:48Z",
+            "updated_at": "2011-04-22T13:33:48Z",
+            "closed_at": null,
+            "html_url": "https://github.com/octocat/Hello-World/issues/1347"
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/assignees"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(issue_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .add_assignees("octocat", "Hello-World", 1347, vec!["octocat".to_string()])
+            .await;
+
+        assert!(result.is_ok());
+        let issue = result.unwrap();
+        assert_eq!(issue.assignees.len(), 1);
+        assert_eq!(issue.assignees[0].login, "octocat");
+    }
+
+    /// Verify remove_assignees unassigns users from an issue and returns the updated issue.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/issues/{number}/assignees endpoint.
+    #[tokio::test]
+    async fn test_remove_assignees() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let issue_json = serde_json::json!({
+            "id": 1,
+            "node_id": "MDU6SXNzdWUx",
+            "number": 1347,
+            "title": "Found a bug",
+            "body": "I'm having a problem with this.",
+            "state": "open",
+            "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+            "labels": [],
+            "assignees": [],
+            "milestone": null,
+            "comments": 0,
+            "created_at": "2011-04-22T13:33:48Z",
+            "updated_at": "2011-04-22T13:33:48Z",
+            "closed_at": null,
+            "html_url": "https://github.com/octocat/Hello-World/issues/1347"
+        });
+
+        Mock::given(method("DELETE"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/assignees"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(issue_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .remove_assignees("octocat", "Hello-World", 1347, vec!["octocat".to_string()])
+            .await;
+
+        assert!(result.is_ok());
+        let issue = result.unwrap();
+        assert!(issue.assignees.is_empty());
+    }
+}
+
+mod lock_operations {
+    use super::*;
+
+    /// Verify lock locks an issue without a reason.
+    ///
+    /// Tests PUT /repos/{owner}/{repo}/issues/{number}/lock endpoint.
+    #[tokio::test]
+    async fn test_lock_issue() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("PUT"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/lock"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .lock("octocat", "Hello-World", 1347, None)
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    /// Verify lock locks an issue with a specific lock reason.
+    ///
+    /// Tests PUT /repos/{owner}/{repo}/issues/{number}/lock endpoint with reason body.
+    #[tokio::test]
+    async fn test_lock_issue_with_reason() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("PUT"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/lock"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .lock("octocat", "Hello-World", 1347, Some(LockReason::TooHeated))
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    /// Verify unlock removes the lock from an issue.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/issues/{number}/lock endpoint.
+    #[tokio::test]
+    async fn test_unlock_issue() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("DELETE"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/lock"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client.issues().unlock("octocat", "Hello-World", 1347).await;
+
+        assert!(result.is_ok());
+    }
+
+    /// Verify lock returns AuthorizationFailed when the caller lacks permission.
+    ///
+    /// Tests PUT /repos/{owner}/{repo}/issues/{number}/lock returning 403.
+    #[tokio::test]
+    async fn test_lock_unauthorized() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("PUT"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/lock"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "message": "Resource not accessible by integration",
+                "documentation_url": "https://docs.github.com/rest/issues/issues#lock-an-issue"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .lock("octocat", "Hello-World", 1347, None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::AuthorizationFailed));
+    }
+}
+
+mod activity_operations {
+    use super::*;
+
+    /// Verify list_activity_events returns discrete activity events on an issue.
+    ///
+    /// Tests GET /repos/{owner}/{repo}/issues/{number}/events endpoint.
+    #[tokio::test]
+    async fn test_list_activity_events() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let events_json = serde_json::json!([
+            {
+                "id": 6430295168u64,
+                "event": "labeled",
+                "actor": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+                "label": {
+                    "id": 1,
+                    "node_id": "MDU6TGFiZWwx",
+                    "name": "bug",
+                    "description": null,
+                    "color": "d73a4a",
+                    "default": false
+                },
+                "created_at": "2022-03-10T14:00:00Z"
+            }
+        ]);
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/events"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(events_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .list_activity_events("octocat", "Hello-World", 1347)
+            .await;
+
+        assert!(result.is_ok());
+        let events = result.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event, "labeled");
+    }
+
+    /// Verify list_timeline returns the full timeline including unknown event kinds.
+    ///
+    /// Tests GET /repos/{owner}/{repo}/issues/{number}/timeline endpoint.
+    /// Unknown event kinds must deserialize to TimelineEvent::Unknown without error.
+    #[tokio::test]
+    async fn test_list_timeline() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let timeline_json = serde_json::json!([
+            {
+                "event": "labeled",
+                "id": 1,
+                "actor": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+                "label": {
+                    "id": 1,
+                    "node_id": "MDU6TGFiZWwx",
+                    "name": "bug",
+                    "description": null,
+                    "color": "d73a4a",
+                    "default": false
+                },
+                "created_at": "2022-03-10T14:00:00Z"
+            },
+            {
+                "event": "commented",
+                "id": 2,
+                "user": {"login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User"},
+                "body": "This is a comment",
+                "created_at": "2022-03-10T15:00:00Z",
+                "updated_at": "2022-03-10T15:00:00Z",
+                "html_url": "https://github.com/octocat/Hello-World/issues/1347#issuecomment-2"
+            },
+            {
+                "event": "commented",
+                "id": 3,
+                "user": {"login": "monalisa", "id": 2, "node_id": "MDQ6VXNlcjI=", "type": "User"},
+                "body": null,
+                "created_at": "2022-03-10T16:00:00Z",
+                "updated_at": "2022-03-10T16:00:00Z",
+                "html_url": "https://github.com/octocat/Hello-World/issues/1347#issuecomment-3"
+            },
+            {
+                "event": "totally_unknown_future_event"
+            }
+        ]);
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/timeline"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(timeline_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .list_timeline("octocat", "Hello-World", 1347)
+            .await;
+
+        assert!(result.is_ok());
+        let events = result.unwrap();
+        assert_eq!(events.len(), 4);
+
+        // Verify the commented event with body
+        if let crate::client::issue::TimelineEvent::Commented {
+            id,
+            user,
+            body,
+            html_url,
+            ..
+        } = &events[1]
+        {
+            assert_eq!(*id, 2);
+            assert_eq!(user.login, "octocat");
+            assert_eq!(body.as_deref(), Some("This is a comment"));
+            assert_eq!(
+                html_url,
+                "https://github.com/octocat/Hello-World/issues/1347#issuecomment-2"
+            );
+        } else {
+            panic!("Expected Commented event at index 1");
+        }
+
+        // Verify the commented event with null body
+        if let crate::client::issue::TimelineEvent::Commented { body, .. } = &events[2] {
+            assert!(body.is_none());
+        } else {
+            panic!("Expected Commented event at index 2");
+        }
+    }
+}
+
+mod milestone_operations {
+    use super::*;
+
+    fn milestone_json() -> serde_json::Value {
+        serde_json::json!({
+            "id": 1,
+            "node_id": "MDk6TWlsZXN0b25lMQ==",
+            "number": 1,
+            "title": "v1.0",
+            "description": "Tracking milestone for v1.0 release",
+            "state": "open",
+            "due_on": null,
+            "open_issues": 5,
+            "closed_issues": 2,
+            "created_at": "2013-02-12T13:22:01Z",
+            "updated_at": "2013-02-12T13:22:01Z",
+            "closed_at": null
+        })
+    }
+
+    /// Verify list returns all milestones in a repository.
+    ///
+    /// Tests GET /repos/{owner}/{repo}/milestones endpoint.
+    #[tokio::test]
+    async fn test_list_milestones() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/milestones"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([milestone_json()])),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .milestones()
+            .list("octocat", "Hello-World", None)
+            .await;
+
+        assert!(result.is_ok());
+        let milestones = result.unwrap();
+        assert_eq!(milestones.len(), 1);
+        assert_eq!(milestones[0].title, "v1.0");
+    }
+
+    /// Verify get returns a single milestone by its number.
+    ///
+    /// Tests GET /repos/{owner}/{repo}/milestones/{number} endpoint.
+    #[tokio::test]
+    async fn test_get_milestone() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/milestones/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(milestone_json()))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client.milestones().get("octocat", "Hello-World", 1).await;
+
+        assert!(result.is_ok());
+        let milestone = result.unwrap();
+        assert_eq!(milestone.number, 1);
+        assert_eq!(milestone.title, "v1.0");
+        assert!(matches!(milestone.state, MilestoneState::Open));
+    }
+
+    /// Verify get returns NotFound error for a non-existent milestone.
+    ///
+    /// Tests GET /repos/{owner}/{repo}/milestones/{number} returning 404.
+    #[tokio::test]
+    async fn test_get_milestone_not_found() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/milestones/999"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found",
+                "documentation_url": "https://docs.github.com/rest/issues/milestones#get-a-milestone"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client.milestones().get("octocat", "Hello-World", 999).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound));
+    }
+
+    /// Verify create creates a new milestone and returns it.
+    ///
+    /// Tests POST /repos/{owner}/{repo}/milestones endpoint.
+    #[tokio::test]
+    async fn test_create_milestone() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("POST"))
+            .and(path("/repos/octocat/Hello-World/milestones"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(milestone_json()))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let request = CreateMilestoneRequest {
+            title: "v1.0".to_string(),
+            state: None,
+            description: None,
+            due_on: None,
+        };
+
+        let result = client
+            .milestones()
+            .create("octocat", "Hello-World", request)
+            .await;
+
+        assert!(result.is_ok());
+        let milestone = result.unwrap();
+        assert_eq!(milestone.title, "v1.0");
+    }
+
+    /// Verify update patches an existing milestone and returns the updated version.
+    ///
+    /// Tests PATCH /repos/{owner}/{repo}/milestones/{number} endpoint.
+    #[tokio::test]
+    async fn test_update_milestone() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let updated_json = serde_json::json!({
+            "id": 1,
+            "node_id": "MDk6TWlsZXN0b25lMQ==",
+            "number": 1,
+            "title": "v1.1",
+            "description": "Tracking milestone for v1.0 release",
+            "state": "open",
+            "due_on": null,
+            "open_issues": 5,
+            "closed_issues": 2,
+            "created_at": "2013-02-12T13:22:01Z",
+            "updated_at": "2013-02-12T13:22:01Z",
+            "closed_at": null
+        });
+
+        Mock::given(method("PATCH"))
+            .and(path("/repos/octocat/Hello-World/milestones/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(updated_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let request = UpdateMilestoneRequest {
+            title: Some("v1.1".to_string()),
+            ..Default::default()
+        };
+
+        let result = client
+            .milestones()
+            .update("octocat", "Hello-World", 1, request)
+            .await;
+
+        assert!(result.is_ok());
+        let milestone = result.unwrap();
+        assert_eq!(milestone.title, "v1.1");
+    }
+
+    /// Verify delete removes a milestone.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/milestones/{number} endpoint.
+    #[tokio::test]
+    async fn test_delete_milestone() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("DELETE"))
+            .and(path("/repos/octocat/Hello-World/milestones/1"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .milestones()
+            .delete("octocat", "Hello-World", 1)
+            .await;
+
+        assert!(result.is_ok());
     }
 }

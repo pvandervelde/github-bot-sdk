@@ -280,26 +280,34 @@ pub use commit::{
 };
 pub use installation::InstallationClient;
 pub use issue::{
-    Comment, CreateCommentRequest, CreateIssueRequest, CreateLabelRequest, Issue, IssueUser, Label,
-    Milestone, SetIssueMilestoneRequest, UpdateCommentRequest, UpdateIssueRequest,
-    UpdateLabelRequest,
+    Comment, CreateCommentRequest, CreateIssueRequest, CreateLabelRequest, CreateMilestoneRequest,
+    Issue, IssueActivityEvent, IssueRename, IssueUser, IssuesClient, Label, LabelsClient,
+    LockReason, Milestone, MilestoneSortField, MilestoneState, MilestoneSummary, MilestonesClient,
+    Reaction, ReactionContent, SortDirection, TimelineEvent, UpdateCommentRequest,
+    UpdateIssueRequest, UpdateLabelRequest, UpdateMilestoneRequest,
 };
 pub use pagination::{extract_page_number, parse_link_header, PagedResponse, Pagination};
-pub use project::{AddProjectV2ItemRequest, ProjectOwner, ProjectV2, ProjectV2Item};
+pub use project::{
+    AddProjectV2ItemRequest, ProjectOwner, ProjectV2, ProjectV2Item, ProjectsClient,
+};
 pub use pull_request::{
     CreatePullRequestCommentRequest, CreatePullRequestRequest, CreateReviewRequest,
     DismissReviewRequest, MergePullRequestRequest, MergeResult, PullRequest, PullRequestBranch,
-    PullRequestComment, PullRequestRepo, Review, SetPullRequestMilestoneRequest,
-    UpdatePullRequestRequest, UpdateReviewRequest,
+    PullRequestComment, PullRequestRepo, PullRequestsClient, Review,
+    UpdatePullRequestCommentRequest, UpdatePullRequestRequest, UpdateReviewRequest,
 };
 pub use rate_limit::{parse_rate_limit_from_headers, RateLimit, RateLimitContext, RateLimiter};
-pub use release::{CreateReleaseRequest, Release, ReleaseAsset, UpdateReleaseRequest};
-pub use repository::{Branch, Commit, GitRef, OwnerType, Repository, RepositoryOwner, Tag};
+pub use release::{
+    CreateReleaseRequest, Release, ReleaseAsset, ReleasesClient, UpdateReleaseRequest,
+};
+pub use repository::{
+    Branch, Commit, GitRef, OwnerType, RepositoriesClient, Repository, RepositoryOwner, Tag,
+};
 pub use retry::{
     calculate_rate_limit_delay, detect_secondary_rate_limit, parse_retry_after, RateLimitInfo,
     RetryPolicy,
 };
-pub use workflow::{TriggerWorkflowRequest, Workflow, WorkflowRun};
+pub use workflow::{TriggerWorkflowRequest, Workflow, WorkflowRun, WorkflowsClient};
 
 /// Configuration for GitHub API client behavior.
 ///

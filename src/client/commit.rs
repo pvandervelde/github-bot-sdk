@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::client::issue::IssueUser;
-use crate::client::InstallationClient;
+use crate::client::repository::RepositoriesClient;
 use crate::error::ApiError;
 
 // ============================================================================
@@ -19,8 +19,8 @@ use crate::error::ApiError;
 /// # Examples
 ///
 /// ```no_run
-/// # use github_bot_sdk::client::InstallationClient;
-/// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+/// # use github_bot_sdk::client::RepositoriesClient;
+/// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
 /// let commit = client.get_commit("owner", "repo", "main").await?;
 /// println!("Latest commit: {} by {}",
 ///     commit.sha,
@@ -74,8 +74,8 @@ pub struct FullCommit {
 /// # Examples
 ///
 /// ```no_run
-/// # use github_bot_sdk::client::InstallationClient;
-/// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+/// # use github_bot_sdk::client::RepositoriesClient;
+/// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
 /// let commit = client.get_commit("owner", "repo", "abc123").await?;
 /// let details = &commit.commit;
 /// println!("Author: {} <{}>", details.author.name, details.author.email);
@@ -118,8 +118,8 @@ pub struct CommitDetails {
 /// # Examples
 ///
 /// ```no_run
-/// # use github_bot_sdk::client::InstallationClient;
-/// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+/// # use github_bot_sdk::client::RepositoriesClient;
+/// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
 /// let commit = client.get_commit("owner", "repo", "abc123").await?;
 /// let sig = &commit.commit.author;
 /// println!("{} <{}> at {}", sig.name, sig.email, sig.date);
@@ -145,8 +145,8 @@ pub struct GitSignature {
 /// # Examples
 ///
 /// ```no_run
-/// # use github_bot_sdk::client::InstallationClient;
-/// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+/// # use github_bot_sdk::client::RepositoriesClient;
+/// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
 /// let commit = client.get_commit("owner", "repo", "abc123").await?;
 /// for parent in &commit.parents {
 ///     println!("Parent SHA: {}", parent.sha);
@@ -171,8 +171,8 @@ pub struct CommitReference {
 /// # Examples
 ///
 /// ```no_run
-/// # use github_bot_sdk::client::InstallationClient;
-/// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+/// # use github_bot_sdk::client::RepositoriesClient;
+/// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
 /// let commit = client.get_commit("owner", "repo", "abc123").await?;
 /// if let Some(v) = &commit.commit.verification {
 ///     if v.verified {
@@ -213,9 +213,9 @@ pub struct Verification {
 /// # Examples
 ///
 /// ```no_run
-/// # use github_bot_sdk::client::InstallationClient;
-/// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-/// let cmp = client.compare_commits("owner", "repo", "v1.0.0", "v1.1.0").await?;
+/// # use github_bot_sdk::client::RepositoriesClient;
+/// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
+/// let cmp = client.compare("owner", "repo", "v1.0.0", "v1.1.0").await?;
 /// println!("Status: {} ({} ahead, {} behind)",
 ///     cmp.status, cmp.ahead_by, cmp.behind_by);
 /// println!("{} commits, {} files changed",
@@ -280,9 +280,9 @@ pub struct Comparison {
 /// # Examples
 ///
 /// ```no_run
-/// # use github_bot_sdk::client::InstallationClient;
-/// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-/// let cmp = client.compare_commits("owner", "repo", "v1.0.0", "v1.1.0").await?;
+/// # use github_bot_sdk::client::RepositoriesClient;
+/// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
+/// let cmp = client.compare("owner", "repo", "v1.0.0", "v1.1.0").await?;
 /// for file in &cmp.files {
 ///     println!("{} [{}]: +{} -{}", file.filename, file.status,
 ///         file.additions, file.deletions);
@@ -339,7 +339,7 @@ pub struct FileChange {
 // Operations
 // ============================================================================
 
-impl InstallationClient {
+impl RepositoriesClient {
     // ------------------------------------------------------------------------
     // Commit Operations
     // ------------------------------------------------------------------------
@@ -370,8 +370,8 @@ impl InstallationClient {
     /// # Examples
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// // Get by SHA
     /// let commit = client.get_commit("owner", "repo", "abc123def456").await?;
     /// println!("Message: {}", commit.commit.message);
@@ -404,7 +404,7 @@ impl InstallationClient {
             repo,
             urlencoding::encode(ref_name)
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
         response.json().await.map_err(ApiError::from)
     }
 
@@ -440,9 +440,9 @@ impl InstallationClient {
     /// # Examples
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
+    /// # use github_bot_sdk::client::RepositoriesClient;
     /// # use chrono::{DateTime, Utc};
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// // List recent commits on the default branch
     /// let commits = client.list_commits(
     ///     "owner", "repo",
@@ -527,7 +527,7 @@ impl InstallationClient {
             format!("{}?{}", base, query_params.join("&"))
         };
 
-        let response = self.get(&request_path).await?;
+        let response = self.client.get(&request_path).await?;
         response.json().await.map_err(ApiError::from)
     }
 
@@ -558,10 +558,10 @@ impl InstallationClient {
     /// # Examples
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// // Compare two tags for release notes
-    /// let cmp = client.compare_commits("owner", "repo", "v1.0.0", "v1.1.0").await?;
+    /// let cmp = client.compare("owner", "repo", "v1.0.0", "v1.1.0").await?;
     ///
     /// println!("Status: {}", cmp.status);
     /// println!("Commits: {}", cmp.total_commits);
@@ -573,7 +573,7 @@ impl InstallationClient {
     /// }
     ///
     /// // Compare a feature branch to main
-    /// let branch_diff = client.compare_commits("owner", "repo", "main", "feature-x").await?;
+    /// let branch_diff = client.compare("owner", "repo", "main", "feature-x").await?;
     /// match branch_diff.status.as_str() {
     ///     "ahead"    => println!("Feature is {} commits ahead", branch_diff.ahead_by),
     ///     "behind"   => println!("Feature is {} commits behind", branch_diff.behind_by),
@@ -605,7 +605,7 @@ impl InstallationClient {
     /// `GET /repos/{owner}/{repo}/compare/{base}...{head}`
     ///
     /// See <https://docs.github.com/en/rest/commits/commits#compare-two-commits>
-    pub async fn compare_commits(
+    pub async fn compare(
         &self,
         owner: &str,
         repo: &str,
@@ -619,7 +619,7 @@ impl InstallationClient {
             urlencoding::encode(base),
             urlencoding::encode(head)
         );
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
         response.json().await.map_err(ApiError::from)
     }
 }

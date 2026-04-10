@@ -1,6 +1,6 @@
 //! Repository Operations
 //!
-//! **Specification**: `docs/spec/interfaces/repository-operations.md`
+//! **Specification**: `docs/specs/interfaces/repository-operations.md`
 
 use crate::{client::InstallationClient, error::ApiError};
 use chrono::{DateTime, Utc};
@@ -112,7 +112,25 @@ struct UpdateGitRefRequest {
     force: bool,
 }
 
-impl InstallationClient {
+// ============================================================================
+// RepositoriesClient
+// ============================================================================
+
+/// Domain client for repository, branch, tag, git-ref, and commit operations.
+///
+/// Obtained via [`InstallationClient::repositories()`]. Cheap to clone (Arc-backed).
+///
+/// See docs/specs/interfaces/repository-operations.md
+#[derive(Debug, Clone)]
+pub struct RepositoriesClient {
+    pub(crate) client: InstallationClient,
+}
+
+impl RepositoriesClient {
+    pub(crate) fn new(client: InstallationClient) -> Self {
+        Self { client }
+    }
+
     /// Get repository metadata.
     ///
     /// Retrieves complete metadata for a repository including owner information,
@@ -136,17 +154,17 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let repo = client.get_repository("octocat", "Hello-World").await?;
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let repo = client.get("octocat", "Hello-World").await?;
     /// println!("Repository: {}", repo.full_name);
     /// println!("Default branch: {}", repo.default_branch);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_repository(&self, owner: &str, repo: &str) -> Result<Repository, ApiError> {
+    pub async fn get(&self, owner: &str, repo: &str) -> Result<Repository, ApiError> {
         let path = format!("/repos/{}/{}", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         // Map HTTP status codes to appropriate errors
         let status = response.status();
@@ -193,8 +211,8 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let branches = client.list_branches("octocat", "Hello-World").await?;
     /// for branch in branches {
     ///     println!("Branch: {} (protected: {})", branch.name, branch.protected);
@@ -204,7 +222,7 @@ impl InstallationClient {
     /// ```
     pub async fn list_branches(&self, owner: &str, repo: &str) -> Result<Vec<Branch>, ApiError> {
         let path = format!("/repos/{}/{}/branches", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -251,8 +269,8 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let branch = client.get_branch("octocat", "Hello-World", "main").await?;
     /// println!("Branch {} at commit {}", branch.name, branch.commit.sha);
     /// # Ok(())
@@ -265,7 +283,7 @@ impl InstallationClient {
         branch: &str,
     ) -> Result<Branch, ApiError> {
         let path = format!("/repos/{}/{}/branches/{}", owner, repo, branch);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -310,21 +328,21 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let git_ref = client.get_git_ref("octocat", "Hello-World", "heads/main").await?;
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let git_ref = client.get_ref("octocat", "Hello-World", "heads/main").await?;
     /// println!("Ref {} points to {}", git_ref.ref_name, git_ref.object.sha);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_git_ref(
+    pub async fn get_ref(
         &self,
         owner: &str,
         repo: &str,
         ref_name: &str,
     ) -> Result<GitRef, ApiError> {
         let path = format!("/repos/{}/{}/git/refs/{}", owner, repo, ref_name);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -370,9 +388,9 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let git_ref = client.create_git_ref(
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let git_ref = client.create_ref(
     ///     "octocat",
     ///     "Hello-World",
     ///     "refs/heads/new-feature",
@@ -381,7 +399,7 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn create_git_ref(
+    pub async fn create_ref(
         &self,
         owner: &str,
         repo: &str,
@@ -394,7 +412,7 @@ impl InstallationClient {
             sha: sha.to_string(),
         };
 
-        let response = self.post(&path, &request_body).await?;
+        let response = self.client.post(&path, &request_body).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -450,9 +468,9 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// let git_ref = client.update_git_ref(
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// let git_ref = client.update_ref(
     ///     "octocat",
     ///     "Hello-World",
     ///     "heads/feature",
@@ -462,7 +480,7 @@ impl InstallationClient {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn update_git_ref(
+    pub async fn update_ref(
         &self,
         owner: &str,
         repo: &str,
@@ -476,7 +494,7 @@ impl InstallationClient {
             force,
         };
 
-        let response = self.patch(&path, &request_body).await?;
+        let response = self.client.patch(&path, &request_body).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -525,20 +543,20 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.delete_git_ref("octocat", "Hello-World", "heads/old-feature").await?;
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.delete_ref("octocat", "Hello-World", "heads/old-feature").await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_git_ref(
+    pub async fn delete_ref(
         &self,
         owner: &str,
         repo: &str,
         ref_name: &str,
     ) -> Result<(), ApiError> {
         let path = format!("/repos/{}/{}/git/refs/{}", owner, repo, ref_name);
-        let response = self.delete(&path).await?;
+        let response = self.client.delete(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -583,8 +601,8 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let tags = client.list_tags("octocat", "Hello-World").await?;
     /// for tag in tags {
     ///     println!("Tag: {} at {}", tag.name, tag.commit.sha);
@@ -594,7 +612,7 @@ impl InstallationClient {
     /// ```
     pub async fn list_tags(&self, owner: &str, repo: &str) -> Result<Vec<Tag>, ApiError> {
         let path = format!("/repos/{}/{}/tags", owner, repo);
-        let response = self.get(&path).await?;
+        let response = self.client.get(&path).await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -641,8 +659,8 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let branch = client.create_branch(
     ///     "octocat",
     ///     "Hello-World",
@@ -661,7 +679,7 @@ impl InstallationClient {
         from_sha: &str,
     ) -> Result<GitRef, ApiError> {
         let ref_name = format!("refs/heads/{}", branch_name);
-        self.create_git_ref(owner, repo, &ref_name, from_sha).await
+        self.create_ref(owner, repo, &ref_name, from_sha).await
     }
 
     /// Create a new tag (convenience wrapper around create_git_ref).
@@ -687,8 +705,8 @@ impl InstallationClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use github_bot_sdk::client::InstallationClient;
-    /// # async fn example(client: &InstallationClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use github_bot_sdk::client::RepositoriesClient;
+    /// # async fn example(client: &RepositoriesClient) -> Result<(), Box<dyn std::error::Error>> {
     /// let tag = client.create_tag(
     ///     "octocat",
     ///     "Hello-World",
@@ -707,6 +725,6 @@ impl InstallationClient {
         from_sha: &str,
     ) -> Result<GitRef, ApiError> {
         let ref_name = format!("refs/tags/{}", tag_name);
-        self.create_git_ref(owner, repo, &ref_name, from_sha).await
+        self.create_ref(owner, repo, &ref_name, from_sha).await
     }
 }

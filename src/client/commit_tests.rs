@@ -1145,7 +1145,7 @@ mod commit_operations {
 
         let client = build_client(test_token, &mock_server.uri()).await;
         let result = client
-            .compare_commits("octocat", "Hello-World", "v1.0.0", "v1.1.0")
+            .compare("octocat", "Hello-World", "v1.0.0", "v1.1.0")
             .await;
 
         assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
@@ -1199,7 +1199,7 @@ mod commit_operations {
 
         let client = build_client(test_token, &mock_server.uri()).await;
         let result = client
-            .compare_commits("octocat", "Hello-World", "v1.0.0", "v1.0.0")
+            .compare("octocat", "Hello-World", "v1.0.0", "v1.0.0")
             .await;
 
         assert!(result.is_ok());
@@ -1280,7 +1280,7 @@ mod commit_operations {
 
         let client = build_client(test_token, &mock_server.uri()).await;
         let result = client
-            .compare_commits("octocat", "Hello-World", "base", "head")
+            .compare("octocat", "Hello-World", "base", "head")
             .await;
 
         assert!(result.is_ok());
@@ -1318,7 +1318,7 @@ mod commit_operations {
 
         let client = build_client(test_token, &mock_server.uri()).await;
         let result = client
-            .compare_commits("octocat", "Hello-World", "bad-base", "bad-head")
+            .compare("octocat", "Hello-World", "bad-base", "bad-head")
             .await;
 
         assert!(matches!(result, Err(ApiError::NotFound)));
@@ -1340,7 +1340,7 @@ mod commit_operations {
 
         let client = build_client(test_token, &mock_server.uri()).await;
         let result = client
-            .compare_commits("octocat", "Hello-World", "base", "head")
+            .compare("octocat", "Hello-World", "base", "head")
             .await;
 
         assert!(matches!(result, Err(ApiError::AuthorizationFailed)));
@@ -1362,7 +1362,7 @@ mod commit_operations {
 
         let client = build_client(test_token, &mock_server.uri()).await;
         let result = client
-            .compare_commits("octocat", "Hello-World", "base", "head")
+            .compare("octocat", "Hello-World", "base", "head")
             .await;
 
         assert!(matches!(result, Err(ApiError::AuthenticationFailed)));
@@ -1382,7 +1382,7 @@ mod commit_operations {
 
         let client = build_client(test_token, &mock_server.uri()).await;
         let result = client
-            .compare_commits("octocat", "Hello-World", "base", "head")
+            .compare("octocat", "Hello-World", "base", "head")
             .await;
 
         match result.unwrap_err() {
@@ -1395,7 +1395,7 @@ mod commit_operations {
     // Helper
     // -------------------------------------------------------------------------
 
-    async fn build_client(token: &str, mock_server_uri: &str) -> InstallationClient {
+    async fn build_client(token: &str, mock_server_uri: &str) -> RepositoriesClient {
         let auth = MockAuthProvider::new_with_token(token);
         let github_client = GitHubClient::builder(auth)
             .config(ClientConfig::default().with_github_api_url(mock_server_uri.to_string()))
@@ -1407,5 +1407,6 @@ mod commit_operations {
             .installation_by_id(installation_id)
             .await
             .unwrap()
+            .repositories()
     }
 }

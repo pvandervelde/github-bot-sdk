@@ -1133,41 +1133,14 @@ impl IssuesClient {
 
     /// Fetch all pages of a GET endpoint that returns `Vec<T>`.
     ///
-    /// Uses `per_page=100` and follows `Link: rel="next"` headers (ADR-002).
+    /// Delegates to [`InstallationClient::fetch_all_pages`] with `per_page=100`
+    /// appended to `base_path` (ADR-002).
     async fn fetch_all<T: serde::de::DeserializeOwned>(
         &self,
         base_path: &str,
     ) -> Result<Vec<T>, ApiError> {
-        let mut all_items: Vec<T> = Vec::new();
-        let mut path = format!("{}?per_page=100", base_path);
-
-        loop {
-            let response = self.client.get(&path).await?;
-            let status = response.status();
-            if !status.is_success() {
-                return Err(map_error(status, response).await);
-            }
-
-            let next_page: Option<u32> = response
-                .headers()
-                .get("Link")
-                .and_then(|h| h.to_str().ok())
-                .and_then(|h| parse_link_header(Some(h)).next)
-                .as_deref()
-                .and_then(extract_page_number);
-
-            let items: Vec<T> = response.json().await.map_err(ApiError::from)?;
-            all_items.extend(items);
-
-            match next_page {
-                Some(page) => {
-                    path = format!("{}?per_page=100&page={}", base_path, page);
-                }
-                None => break,
-            }
-        }
-
-        Ok(all_items)
+        let first_page = format!("{}?per_page=100", base_path);
+        self.client.fetch_all_pages(&first_page).await
     }
 }
 

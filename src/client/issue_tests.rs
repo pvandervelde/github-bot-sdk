@@ -4,7 +4,7 @@ use super::*;
 use crate::auth::InstallationId;
 use crate::client::{ClientConfig, GitHubClient};
 use crate::error::ApiError;
-use wiremock::matchers::{header, method, path, query_param};
+use wiremock::matchers::{header, method, path, query_param, query_param_is_missing};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[path = "test_helpers.rs"]
@@ -1369,9 +1369,12 @@ mod comment_operations {
         let link_header = r#"<https://api.github.com/repos/octocat/Hello-World/issues/1347/comments?per_page=100&page=2>; rel="next""#;
 
         // Page 1: return two comments with a Link header pointing to page 2.
+        // `query_param_is_missing("page")` prevents this mock from also matching
+        // page-2 requests (which would create an infinite pagination loop).
         Mock::given(method("GET"))
             .and(path("/repos/octocat/Hello-World/issues/1347/comments"))
             .and(query_param("per_page", "100"))
+            .and(query_param_is_missing("page"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("Link", link_header)

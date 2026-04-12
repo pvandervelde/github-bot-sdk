@@ -6,7 +6,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::client::{extract_page_number, parse_link_header, InstallationClient, PagedResponse};
+use crate::client::{parse_link_header, InstallationClient, PagedResponse};
 use crate::error::ApiError;
 
 /// Milestone state.

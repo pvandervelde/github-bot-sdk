@@ -1292,6 +1292,164 @@ mod comment_operations {
 
         assert!(result.is_ok());
     }
+
+    /// Verify list_comments returns an empty vec when the issue has no comments.
+    #[tokio::test]
+    async fn test_list_issue_comments_empty() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/comments"))
+            .and(query_param("per_page", "100"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .list_comments("octocat", "Hello-World", 1347)
+            .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    /// Verify list_comments follows Link: rel="next" headers and returns all pages.
+    #[tokio::test]
+    async fn test_list_issue_comments_multi_page() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        let page1_json = serde_json::json!([
+            {
+                "id": 1,
+                "node_id": "MDEyOklzc3VlQ29tbWVudDE=",
+                "body": "First comment",
+                "user": { "login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User" },
+                "created_at": "2011-04-14T16:00:49Z",
+                "updated_at": "2011-04-14T16:00:49Z",
+                "html_url": "https://github.com/octocat/Hello-World/issues/1347#issuecomment-1"
+            },
+            {
+                "id": 2,
+                "node_id": "MDEyOklzc3VlQ29tbWVudDI=",
+                "body": "Second comment",
+                "user": { "login": "hubot", "id": 2, "node_id": "MDQ6VXNlcjI=", "type": "Bot" },
+                "created_at": "2011-04-14T17:00:49Z",
+                "updated_at": "2011-04-14T17:00:49Z",
+                "html_url": "https://github.com/octocat/Hello-World/issues/1347#issuecomment-2"
+            }
+        ]);
+
+        let page2_json = serde_json::json!([
+            {
+                "id": 3,
+                "node_id": "MDEyOklzc3VlQ29tbWVudDM=",
+                "body": "Third comment",
+                "user": { "login": "octocat", "id": 1, "node_id": "MDQ6VXNlcjE=", "type": "User" },
+                "created_at": "2011-04-14T18:00:49Z",
+                "updated_at": "2011-04-14T18:00:49Z",
+                "html_url": "https://github.com/octocat/Hello-World/issues/1347#issuecomment-3"
+            }
+        ]);
+
+        let link_header = r#"<https://api.github.com/repos/octocat/Hello-World/issues/1347/comments?per_page=100&page=2>; rel="next""#;
+
+        // Page 1: return two comments with a Link header pointing to page 2.
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/comments"))
+            .and(query_param("per_page", "100"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("Link", link_header)
+                    .set_body_json(page1_json),
+            )
+            .mount(&mock_server)
+            .await;
+
+        // Page 2: return one comment with no further Link header.
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/issues/1347/comments"))
+            .and(query_param("per_page", "100"))
+            .and(query_param("page", "2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(page2_json))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .list_comments("octocat", "Hello-World", 1347)
+            .await;
+
+        assert!(result.is_ok());
+        let comments = result.unwrap();
+        assert_eq!(comments.len(), 3);
+        assert_eq!(comments[0].id, 1);
+        assert_eq!(comments[1].id, 2);
+        assert_eq!(comments[2].id, 3);
+        // Verify ascending created_at order (GitHub default).
+        assert!(comments[0].created_at < comments[1].created_at);
+        assert!(comments[1].created_at < comments[2].created_at);
+    }
+
+    /// Verify list_comments returns NotFound when the issue does not exist.
+    #[tokio::test]
+    async fn test_list_issue_comments_not_found() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("GET"))
+            .and(path("/repos/octocat/Hello-World/issues/9999/comments"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found",
+                "documentation_url": "https://docs.github.com/rest/issues/comments"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .issues()
+            .list_comments("octocat", "Hello-World", 9999)
+            .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound));
+    }
 }
 
 mod serialization {

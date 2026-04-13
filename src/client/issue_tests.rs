@@ -1375,6 +1375,7 @@ mod comment_operations {
             .and(path("/repos/octocat/Hello-World/issues/1347/comments"))
             .and(query_param("per_page", "100"))
             .and(query_param_is_missing("page"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
             .respond_with(
                 ResponseTemplate::new(200)
                     .insert_header("Link", link_header)
@@ -1388,6 +1389,7 @@ mod comment_operations {
             .and(path("/repos/octocat/Hello-World/issues/1347/comments"))
             .and(query_param("per_page", "100"))
             .and(query_param("page", "2"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
             .respond_with(ResponseTemplate::new(200).set_body_json(page2_json))
             .mount(&mock_server)
             .await;

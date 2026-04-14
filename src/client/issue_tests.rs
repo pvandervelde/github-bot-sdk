@@ -1429,6 +1429,8 @@ mod comment_operations {
 
         Mock::given(method("GET"))
             .and(path("/repos/octocat/Hello-World/issues/9999/comments"))
+            .and(query_param("per_page", "100"))
+            .and(header("Authorization", format!("Bearer {}", test_token)))
             .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
                 "message": "Not Found",
                 "documentation_url": "https://docs.github.com/rest/issues/comments"

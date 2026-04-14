@@ -35,7 +35,7 @@ hex = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 
 # Random number generation for jitter
-rand = "0.9"
+rand = "0.9.3"
 
 # Error handling
 thiserror = "2.0"

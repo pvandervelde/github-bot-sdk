@@ -986,6 +986,15 @@ impl PullRequestsClient {
     /// Remove a label from a pull request.
     ///
     /// See docs/spec/interfaces/pull-request-operations.md
+    ///
+    /// # Error mapping
+    ///
+    /// GitHub returns HTTP 422 when the label name is unprocessable (e.g. does
+    /// not exist on the repository).  This method maps that to
+    /// [`ApiError::InvalidRequest`], which is the correct semantic mapping and
+    /// is consistent with how other label methods in this file behave.  Callers
+    /// that previously matched on `ApiError::HttpError { status: 422, .. }`
+    /// must be updated to match `ApiError::InvalidRequest { .. }` instead.
     pub async fn remove_label(
         &self,
         owner: &str,
@@ -1005,21 +1014,7 @@ impl PullRequestsClient {
 
         let status = response.status();
         if !status.is_success() {
-            return Err(match status.as_u16() {
-                404 => ApiError::NotFound,
-                403 => ApiError::AuthorizationFailed,
-                401 => ApiError::AuthenticationFailed,
-                _ => {
-                    let message = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Unknown error".to_string());
-                    ApiError::HttpError {
-                        status: status.as_u16(),
-                        message,
-                    }
-                }
-            });
+            return Err(map_error(status, response).await);
         }
         Ok(())
     }

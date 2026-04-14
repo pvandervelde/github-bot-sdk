@@ -579,20 +579,7 @@ impl InstallationClient {
             let response = self.get(&path).await?;
             let status = response.status();
             if !status.is_success() {
-                let message = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "Unknown error".to_string());
-                return Err(match status.as_u16() {
-                    401 => ApiError::AuthenticationFailed,
-                    403 => ApiError::AuthorizationFailed,
-                    404 => ApiError::NotFound,
-                    422 => ApiError::InvalidRequest { message },
-                    _ => ApiError::HttpError {
-                        status: status.as_u16(),
-                        message,
-                    },
-                });
+                return Err(super::map_http_error(status, response).await);
             }
 
             let next_page: Option<u32> = response

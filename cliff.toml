@@ -1,6 +1,10 @@
 # git-cliff ~ configuration file
 # https://git-cliff.org/docs/configuration
 
+[remote.github]
+owner = "pvandervelde"
+repo = "github-bot-sdk"
+
 [changelog]
 # template for the changelog footer
 header = """

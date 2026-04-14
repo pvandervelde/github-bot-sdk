@@ -713,17 +713,29 @@ mod label_operations {
         assert!(result.unwrap().is_empty());
     }
 
-    /// Verify remove_label sends a DELETE request to the correct endpoint.
+    /// Verify remove_label sends a DELETE request and returns remaining labels.
     ///
     /// Tests DELETE /repos/{owner}/{repo}/issues/{number}/labels/{name}.
+    /// The GitHub endpoint responds with the remaining labels as a JSON array.
     #[tokio::test]
     async fn test_remove_label() {
         let mock_server = MockServer::start().await;
         let test_token = "ghs_test_token";
 
+        let remaining_label = serde_json::json!({
+            "id": 2,
+            "node_id": "MDU6TGFiZWwy",
+            "name": "enhancement",
+            "description": "New feature or request",
+            "color": "a2eeef",
+            "default": true
+        });
+
         Mock::given(method("DELETE"))
             .and(path("/repos/octocat/Hello-World/issues/42/labels/bug"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([remaining_label])),
+            )
             .mount(&mock_server)
             .await;
 
@@ -743,5 +755,42 @@ mod label_operations {
             .await;
 
         assert!(result.is_ok());
+        let labels = result.unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "enhancement");
+    }
+
+    /// Verify remove_label returns NotFound when the label is not applied to the PR.
+    ///
+    /// Tests DELETE /repos/{owner}/{repo}/issues/{number}/labels/{name} returning 404.
+    #[tokio::test]
+    async fn test_remove_label_not_found() {
+        let mock_server = MockServer::start().await;
+        let test_token = "ghs_test_token";
+
+        Mock::given(method("DELETE"))
+            .and(path(
+                "/repos/octocat/Hello-World/issues/42/labels/nonexistent",
+            ))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token(test_token);
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .pull_requests()
+            .remove_label("octocat", "Hello-World", 42, "nonexistent")
+            .await;
+
+        assert!(matches!(result, Err(ApiError::NotFound)));
     }
 }

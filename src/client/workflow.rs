@@ -1,6 +1,8 @@
 // Spec: docs/specs/interfaces/additional-operations.md
 // Workflow and workflow run operations for GitHub API
 
+use std::fmt;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +23,18 @@ pub enum WorkflowState {
     DisabledFork,
     /// Workflow has been deleted.
     Deleted,
+}
+
+impl fmt::Display for WorkflowState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WorkflowState::Active => write!(f, "active"),
+            WorkflowState::DisabledManually => write!(f, "disabled_manually"),
+            WorkflowState::DisabledInactivity => write!(f, "disabled_inactivity"),
+            WorkflowState::DisabledFork => write!(f, "disabled_fork"),
+            WorkflowState::Deleted => write!(f, "deleted"),
+        }
+    }
 }
 
 /// GitHub Actions workflow.
@@ -58,7 +72,7 @@ pub struct Workflow {
 }
 
 /// Status of a GitHub Actions workflow run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowRunStatus {
     /// Run is queued and waiting to start.
@@ -66,6 +80,7 @@ pub enum WorkflowRunStatus {
     /// Run is currently executing.
     InProgress,
     /// Run has finished.
+    #[default]
     Completed,
     /// Run is waiting on a required check or deployment protection rule.
     Waiting,
@@ -75,11 +90,25 @@ pub enum WorkflowRunStatus {
     Pending,
 }
 
+impl fmt::Display for WorkflowRunStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WorkflowRunStatus::Queued => write!(f, "queued"),
+            WorkflowRunStatus::InProgress => write!(f, "in_progress"),
+            WorkflowRunStatus::Completed => write!(f, "completed"),
+            WorkflowRunStatus::Waiting => write!(f, "waiting"),
+            WorkflowRunStatus::Requested => write!(f, "requested"),
+            WorkflowRunStatus::Pending => write!(f, "pending"),
+        }
+    }
+}
+
 /// Conclusion of a completed GitHub Actions workflow run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkflowRunConclusion {
     /// Run completed successfully.
+    #[default]
     Success,
     /// Run failed.
     Failure,
@@ -95,6 +124,21 @@ pub enum WorkflowRunConclusion {
     Stale,
     /// Run completed with a neutral result.
     Neutral,
+}
+
+impl fmt::Display for WorkflowRunConclusion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WorkflowRunConclusion::Success => write!(f, "success"),
+            WorkflowRunConclusion::Failure => write!(f, "failure"),
+            WorkflowRunConclusion::Cancelled => write!(f, "cancelled"),
+            WorkflowRunConclusion::Skipped => write!(f, "skipped"),
+            WorkflowRunConclusion::TimedOut => write!(f, "timed_out"),
+            WorkflowRunConclusion::ActionRequired => write!(f, "action_required"),
+            WorkflowRunConclusion::Stale => write!(f, "stale"),
+            WorkflowRunConclusion::Neutral => write!(f, "neutral"),
+        }
+    }
 }
 
 /// GitHub Actions workflow run.

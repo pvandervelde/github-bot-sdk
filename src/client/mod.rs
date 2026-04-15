@@ -284,7 +284,7 @@ use crate::error::ApiError;
 /// `InstallationClient::fetch_all_pages`. The response body is consumed only
 /// for status codes that carry a useful message (422 and any unrecognised
 /// error), avoiding unnecessary I/O on 401 / 403 / 404 responses.
-pub(super) async fn map_http_error(
+pub(in crate::client) async fn map_http_error(
     status: reqwest::StatusCode,
     response: reqwest::Response,
 ) -> ApiError {

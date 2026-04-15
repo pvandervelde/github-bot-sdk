@@ -1,19 +1,30 @@
 # Additional Operations Interface Specification
 
-**Module**: `github-bot-sdk::client::{milestone, workflow, release}`
+**Module**: `github-bot-sdk::client::{issue, workflow, release}`
 **Files**:
 
-- `crates/github-bot-sdk/src/client/milestone.rs`
-- `crates/github-bot-sdk/src/client/workflow.rs`
-- `crates/github-bot-sdk/src/client/release.rs`
+- `src/client/issue.rs` — `MilestonesClient`
+- `src/client/workflow.rs` — `WorkflowsClient`
+- `src/client/release.rs` — `ReleasesClient`
 
 **Dependencies**: `InstallationClient`, `ApiError`, shared types
+
+**Sub-client pattern**: All three clients follow ADR-003 — they are obtained via factory
+methods on `InstallationClient` and are zero-cost to construct (no API call).
+
+```rust
+let milestones = client.milestones();   // → MilestonesClient
+let workflows  = client.workflows();    // → WorkflowsClient
+let releases   = client.releases();     // → ReleasesClient
+```
 
 ## Overview
 
 This specification covers additional GitHub operations for milestones, workflows, and releases. These are installation-scoped operations requiring appropriate repository permissions.
 
 ## Milestone Operations
+
+See the authoritative specification in [milestones-client.md](./milestones-client.md).
 
 ### Types
 
@@ -23,28 +34,24 @@ This specification covers additional GitHub operations for milestones, workflows
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Milestone {
     pub id: u64,
+    pub node_id: String,
     pub number: u64,
     pub title: String,
     pub description: Option<String>,
     pub state: MilestoneState,
-    pub open_issues: u64,
-    pub closed_issues: u64,
-    pub html_url: String,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub due_on: Option<OffsetDateTime>,
-    #[serde(with = "time::serde::rfc3339::option")]
-    pub closed_at: Option<OffsetDateTime>,
+    pub due_on: Option<DateTime<Utc>>,
+    pub open_issues: u32,
+    pub closed_issues: u32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub closed_at: Option<DateTime<Utc>>,
 }
 ```
 
 #### MilestoneState
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MilestoneState {
     Open,
@@ -54,112 +61,112 @@ pub enum MilestoneState {
 
 ### Operations
 
-#### Get Milestone
+#### `list`
 
 ```rust
-impl InstallationClient {
-    /// Get a specific milestone by number.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `milestone_number` - Milestone number
-    ///
-    /// # Returns
-    ///
-    /// Returns `Milestone` with full metadata.
+impl MilestonesClient {
+    /// List all milestones in a repository (auto-paginated).
     ///
     /// # Errors
     ///
-    /// * `ApiError::NotFound` - Milestone doesn't exist
-    pub async fn get_milestone(
+    /// * `ApiError::NotFound` — repository does not exist
+    pub async fn list(
         &self,
         owner: &str,
         repo: &str,
-        milestone_number: u64,
-    ) -> Result<Milestone, ApiError>;
-}
-```
-
-#### List Milestones
-
-```rust
-impl InstallationClient {
-    /// List milestones in a repository.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `state` - Optional state filter (open, closed, all)
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of milestones.
-    pub async fn list_milestones(
-        &self,
-        owner: &str,
-        repo: &str,
-        state: Option<MilestoneState>,
+        query: Option<ListMilestonesQuery>,
     ) -> Result<Vec<Milestone>, ApiError>;
 }
 ```
 
-#### Create Milestone
+**Endpoint**: `GET /repos/{owner}/{repo}/milestones?per_page=100`
+
+#### `get`
 
 ```rust
-impl InstallationClient {
-    /// Create a new milestone.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `request` - Milestone creation data
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `Milestone`.
+impl MilestonesClient {
+    /// Get a single milestone by its repository-scoped number.
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing permission
-    /// * `ApiError::HttpError` - Milestone with title already exists (422)
-    pub async fn create_milestone(
-        &self,
-        owner: &str,
-        repo: &str,
-        request: &CreateMilestoneRequest,
-    ) -> Result<Milestone, ApiError>;
-}
-```
-
-#### Update Milestone
-
-```rust
-impl InstallationClient {
-    /// Update an existing milestone.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `milestone_number` - Milestone number
-    /// * `request` - Update data
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `Milestone`.
-    pub async fn update_milestone(
+    /// * `ApiError::NotFound` — milestone does not exist
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
         milestone_number: u64,
-        request: &UpdateMilestoneRequest,
     ) -> Result<Milestone, ApiError>;
 }
 ```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/milestones/{milestone_number}`
+
+#### `create`
+
+```rust
+impl MilestonesClient {
+    /// Create a new milestone.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::InvalidRequest` — title is empty (422)
+    /// * `ApiError::AuthorizationFailed` — missing `issues: write`
+    pub async fn create(
+        &self,
+        owner: &str,
+        repo: &str,
+        request: CreateMilestoneRequest,
+    ) -> Result<Milestone, ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/milestones`
+
+#### `update`
+
+```rust
+impl MilestonesClient {
+    /// Update an existing milestone.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — milestone does not exist
+    /// * `ApiError::AuthorizationFailed` — missing `issues: write`
+    pub async fn update(
+        &self,
+        owner: &str,
+        repo: &str,
+        milestone_number: u64,
+        request: UpdateMilestoneRequest,
+    ) -> Result<Milestone, ApiError>;
+}
+```
+
+**Endpoint**: `PATCH /repos/{owner}/{repo}/milestones/{milestone_number}`
+
+#### `delete`
+
+```rust
+impl MilestonesClient {
+    /// Delete a milestone.
+    ///
+    /// Issues assigned to the deleted milestone are unlinked but otherwise unaffected.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — milestone does not exist
+    /// * `ApiError::AuthorizationFailed` — missing `issues: write`
+    pub async fn delete(
+        &self,
+        owner: &str,
+        repo: &str,
+        milestone_number: u64,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `DELETE /repos/{owner}/{repo}/milestones/{milestone_number}`
+**Success**: 204 No Content
 
 ### Request Types
 
@@ -168,9 +175,11 @@ impl InstallationClient {
 pub struct CreateMilestoneRequest {
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<MilestoneState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", with = "time::serde::rfc3339::option")]
-    pub due_on: Option<OffsetDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_on: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -181,8 +190,8 @@ pub struct UpdateMilestoneRequest {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<MilestoneState>,
-    #[serde(skip_serializing_if = "Option::is_none", with = "time::serde::rfc3339::option")]
-    pub due_on: Option<OffsetDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due_on: Option<DateTime<Utc>>,
 }
 ```
 
@@ -196,14 +205,15 @@ pub struct UpdateMilestoneRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workflow {
     pub id: u64,
+    pub node_id: String,
     pub name: String,
     pub path: String,
     pub state: WorkflowState,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub url: String,
     pub html_url: String,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
+    pub badge_url: String,
 }
 ```
 
@@ -211,10 +221,13 @@ pub struct Workflow {
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum WorkflowState {
     Active,
-    Disabled,
+    DisabledManually,
+    DisabledInactivity,
+    DisabledFork,
+    Deleted,
 }
 ```
 
@@ -224,15 +237,19 @@ pub enum WorkflowState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowRun {
     pub id: u64,
+    pub node_id: String,
     pub name: String,
-    pub workflow_id: u64,
+    pub run_number: u64,
+    pub event: String,
     pub status: WorkflowRunStatus,
     pub conclusion: Option<WorkflowRunConclusion>,
+    pub workflow_id: u64,
+    pub head_branch: String,
+    pub head_sha: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub url: String,
     pub html_url: String,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub updated_at: OffsetDateTime,
 }
 ```
 
@@ -245,6 +262,9 @@ pub enum WorkflowRunStatus {
     Queued,
     InProgress,
     Completed,
+    Waiting,
+    Requested,
+    Pending,
 }
 ```
 
@@ -258,26 +278,21 @@ pub enum WorkflowRunConclusion {
     Failure,
     Cancelled,
     Skipped,
+    TimedOut,
+    ActionRequired,
+    Stale,
+    Neutral,
 }
 ```
 
 ### Operations
 
-#### List Workflows
+#### `list`
 
 ```rust
-impl InstallationClient {
-    /// List workflows in a repository.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of workflows.
-    pub async fn list_workflows(
+impl WorkflowsClient {
+    /// List workflows in a repository (auto-paginated).
+    pub async fn list(
         &self,
         owner: &str,
         repo: &str,
@@ -285,22 +300,18 @@ impl InstallationClient {
 }
 ```
 
-#### Get Workflow
+**Endpoint**: `GET /repos/{owner}/{repo}/actions/workflows`
+
+#### `get`
 
 ```rust
-impl InstallationClient {
+impl WorkflowsClient {
     /// Get a specific workflow by ID.
     ///
-    /// # Arguments
+    /// # Errors
     ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `workflow_id` - Workflow ID
-    ///
-    /// # Returns
-    ///
-    /// Returns `Workflow` with metadata.
-    pub async fn get_workflow(
+    /// * `ApiError::NotFound` — workflow doesn't exist
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
@@ -309,22 +320,37 @@ impl InstallationClient {
 }
 ```
 
-#### List Workflow Runs
+**Endpoint**: `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}`
+
+#### `trigger`
 
 ```rust
-impl InstallationClient {
-    /// List runs for a specific workflow.
+impl WorkflowsClient {
+    /// Trigger a workflow dispatch event.
     ///
-    /// # Arguments
+    /// # Errors
     ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `workflow_id` - Workflow ID
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of workflow runs.
-    pub async fn list_workflow_runs(
+    /// * `ApiError::AuthorizationFailed` — missing `actions: write` permission
+    /// * `ApiError::NotFound` — workflow doesn't exist or has no `workflow_dispatch` trigger
+    pub async fn trigger(
+        &self,
+        owner: &str,
+        repo: &str,
+        workflow_id: u64,
+        request: TriggerWorkflowRequest,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches`
+**Success**: 204 No Content
+
+#### `list_runs`
+
+```rust
+impl WorkflowsClient {
+    /// List runs for a specific workflow (auto-paginated).
+    pub async fn list_runs(
         &self,
         owner: &str,
         repo: &str,
@@ -333,32 +359,82 @@ impl InstallationClient {
 }
 ```
 
-#### Trigger Workflow Dispatch
+**Endpoint**: `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs`
+
+#### `get_run`
 
 ```rust
-impl InstallationClient {
-    /// Trigger a workflow dispatch event.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `workflow_id` - Workflow ID
-    /// * `ref_name` - Git ref (branch or tag)
-    /// * `inputs` - Optional workflow inputs
+impl WorkflowsClient {
+    /// Get a specific workflow run by ID.
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing `actions:write` permission
-    /// * `ApiError::NotFound` - Workflow doesn't exist or no dispatch trigger
-    pub async fn trigger_workflow_dispatch(
+    /// * `ApiError::NotFound` — run doesn't exist
+    pub async fn get_run(
         &self,
         owner: &str,
         repo: &str,
-        workflow_id: u64,
-        ref_name: &str,
-        inputs: Option<serde_json::Value>,
+        run_id: u64,
+    ) -> Result<WorkflowRun, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/actions/runs/{run_id}`
+
+#### `cancel_run`
+
+```rust
+impl WorkflowsClient {
+    /// Cancel a workflow run.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — run doesn't exist
+    pub async fn cancel_run(
+        &self,
+        owner: &str,
+        repo: &str,
+        run_id: u64,
     ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/actions/runs/{run_id}/cancel`
+**Success**: 202 Accepted
+
+#### `rerun_run`
+
+```rust
+impl WorkflowsClient {
+    /// Re-run a workflow run.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — run doesn't exist
+    pub async fn rerun_run(
+        &self,
+        owner: &str,
+        repo: &str,
+        run_id: u64,
+    ) -> Result<(), ApiError>;
+}
+```
+
+**Endpoint**: `POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun`
+**Success**: 201 Created
+
+### Request Types
+
+```rust
+#[derive(Debug, Clone, Serialize)]
+pub struct TriggerWorkflowRequest {
+    /// Git reference (branch or tag)
+    #[serde(rename = "ref")]
+    pub git_ref: String,
+
+    /// Workflow inputs (key-value pairs)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inputs: Option<std::collections::HashMap<String, String>>,
 }
 ```
 
@@ -372,39 +448,49 @@ impl InstallationClient {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Release {
     pub id: u64,
+    pub node_id: String,
     pub tag_name: String,
+    pub target_commitish: String,
     pub name: Option<String>,
     pub body: Option<String>,
     pub draft: bool,
     pub prerelease: bool,
+    pub author: IssueUser,
+    pub created_at: DateTime<Utc>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub url: String,
     pub html_url: String,
-    pub tarball_url: String,
-    pub zipball_url: String,
-    #[serde(with = "time::serde::rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde(with = "time::serde::rfc3339")]
-    pub published_at: OffsetDateTime,
+    pub assets: Vec<ReleaseAsset>,
 }
 ```
 
 ### Operations
 
-#### Get Release
+#### `list`
 
 ```rust
-impl InstallationClient {
+impl ReleasesClient {
+    /// List releases in a repository (most recent first, auto-paginated).
+    pub async fn list(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Vec<Release>, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/releases`
+
+#### `get`
+
+```rust
+impl ReleasesClient {
     /// Get a specific release by ID.
     ///
-    /// # Arguments
+    /// # Errors
     ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `release_id` - Release ID
-    ///
-    /// # Returns
-    ///
-    /// Returns `Release` with full metadata.
-    pub async fn get_release(
+    /// * `ApiError::NotFound` — release doesn't exist
+    pub async fn get(
         &self,
         owner: &str,
         repo: &str,
@@ -413,26 +499,37 @@ impl InstallationClient {
 }
 ```
 
-#### Get Release by Tag
+**Endpoint**: `GET /repos/{owner}/{repo}/releases/{release_id}`
+
+#### `get_latest`
 
 ```rust
-impl InstallationClient {
-    /// Get a release by tag name.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `tag` - Tag name
-    ///
-    /// # Returns
-    ///
-    /// Returns `Release` associated with the tag.
+impl ReleasesClient {
+    /// Get the latest published (non-draft, non-prerelease) release.
     ///
     /// # Errors
     ///
-    /// * `ApiError::NotFound` - No release for this tag
-    pub async fn get_release_by_tag(
+    /// * `ApiError::NotFound` — no published release exists
+    pub async fn get_latest(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Release, ApiError>;
+}
+```
+
+**Endpoint**: `GET /repos/{owner}/{repo}/releases/latest`
+
+#### `get_by_tag`
+
+```rust
+impl ReleasesClient {
+    /// Get a release by its tag name.
+    ///
+    /// # Errors
+    ///
+    /// * `ApiError::NotFound` — no release for this tag
+    pub async fn get_by_tag(
         &self,
         owner: &str,
         repo: &str,
@@ -441,99 +538,61 @@ impl InstallationClient {
 }
 ```
 
-#### List Releases
+**Endpoint**: `GET /repos/{owner}/{repo}/releases/tags/{tag}`
+
+#### `create`
 
 ```rust
-impl InstallationClient {
-    /// List releases in a repository.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    ///
-    /// # Returns
-    ///
-    /// Returns vector of releases (most recent first).
-    pub async fn list_releases(
-        &self,
-        owner: &str,
-        repo: &str,
-    ) -> Result<Vec<Release>, ApiError>;
-}
-```
-
-#### Create Release
-
-```rust
-impl InstallationClient {
+impl ReleasesClient {
     /// Create a new release.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `request` - Release creation data
-    ///
-    /// # Returns
-    ///
-    /// Returns the created `Release`.
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing permission
-    /// * `ApiError::HttpError` - Tag doesn't exist (422)
-    pub async fn create_release(
+    /// * `ApiError::AuthorizationFailed` — missing permission
+    /// * `ApiError::InvalidRequest` — tag doesn't exist (422)
+    pub async fn create(
         &self,
         owner: &str,
         repo: &str,
-        request: &CreateReleaseRequest,
+        request: CreateReleaseRequest,
     ) -> Result<Release, ApiError>;
 }
 ```
 
-#### Update Release
+**Endpoint**: `POST /repos/{owner}/{repo}/releases`
+
+#### `update`
 
 ```rust
-impl InstallationClient {
+impl ReleasesClient {
     /// Update an existing release.
     ///
-    /// # Arguments
+    /// # Errors
     ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `release_id` - Release ID
-    /// * `request` - Update data
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `Release`.
-    pub async fn update_release(
+    /// * `ApiError::NotFound` — release doesn't exist
+    pub async fn update(
         &self,
         owner: &str,
         repo: &str,
         release_id: u64,
-        request: &UpdateReleaseRequest,
+        request: UpdateReleaseRequest,
     ) -> Result<Release, ApiError>;
 }
 ```
 
-#### Delete Release
+**Endpoint**: `PATCH /repos/{owner}/{repo}/releases/{release_id}`
+
+#### `delete`
 
 ```rust
-impl InstallationClient {
+impl ReleasesClient {
     /// Delete a release.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - Repository owner
-    /// * `repo` - Repository name
-    /// * `release_id` - Release ID
     ///
     /// # Errors
     ///
-    /// * `ApiError::PermissionDenied` - Missing permission
-    pub async fn delete_release(
+    /// * `ApiError::AuthorizationFailed` — missing permission
+    /// * `ApiError::NotFound` — release doesn't exist
+    pub async fn delete(
         &self,
         owner: &str,
         repo: &str,
@@ -542,12 +601,18 @@ impl InstallationClient {
 }
 ```
 
+**Endpoint**: `DELETE /repos/{owner}/{repo}/releases/{release_id}`
+**Success**: 204 No Content
+
 ### Request Types
 
 ```rust
 #[derive(Debug, Clone, Serialize)]
 pub struct CreateReleaseRequest {
+    /// Tag name (required)
     pub tag_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_commitish: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -556,6 +621,9 @@ pub struct CreateReleaseRequest {
     pub draft: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prerelease: Option<bool>,
+    /// Auto-generate release name and notes from merged PRs. Create-only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generate_release_notes: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -577,64 +645,31 @@ pub struct UpdateReleaseRequest {
 
 ### Milestones
 
-- List: `/repos/{owner}/{repo}/milestones`
-- Get/Update: `/repos/{owner}/{repo}/milestones/{milestone_number}`
+- List: `GET /repos/{owner}/{repo}/milestones`
+- Get / Update / Delete: `/repos/{owner}/{repo}/milestones/{milestone_number}`
+- Create: `POST /repos/{owner}/{repo}/milestones`
 
 ### Workflows
 
-- List workflows: `/repos/{owner}/{repo}/actions/workflows`
-- Get workflow: `/repos/{owner}/{repo}/actions/workflows/{workflow_id}`
-- List runs: `/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs`
-- Dispatch: `/repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches`
+- List workflows: `GET /repos/{owner}/{repo}/actions/workflows`
+- Get workflow: `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}`
+- Trigger dispatch: `POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches`
+- List runs: `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs`
+- Get / Cancel / Re-run: `/repos/{owner}/{repo}/actions/runs/{run_id}`
 
 ### Releases
 
-- List: `/repos/{owner}/{repo}/releases`
-- Get: `/repos/{owner}/{repo}/releases/{release_id}`
-- Get by tag: `/repos/{owner}/{repo}/releases/tags/{tag}`
-
-## Usage Examples
-
-### Create Milestone
-
-```rust
-let request = CreateMilestoneRequest {
-    title: "v1.0".to_string(),
-    description: Some("First release".to_string()),
-    due_on: Some(OffsetDateTime::now_utc() + Duration::days(30)),
-};
-
-let milestone = client.create_milestone("owner", "repo", &request).await?;
-```
-
-### Trigger Workflow
-
-```rust
-client.trigger_workflow_dispatch(
-    "owner",
-    "repo",
-    12345,
-    "main",
-    Some(json!({"debug": true})),
-).await?;
-```
-
-### Create Release
-
-```rust
-let request = CreateReleaseRequest {
-    tag_name: "v1.0.0".to_string(),
-    name: Some("Version 1.0".to_string()),
-    body: Some("Release notes...".to_string()),
-    draft: Some(false),
-    prerelease: Some(false),
-};
-
-let release = client.create_release("owner", "repo", &request).await?;
-```
+- List: `GET /repos/{owner}/{repo}/releases`
+- Get: `GET /repos/{owner}/{repo}/releases/{release_id}`
+- Get latest: `GET /repos/{owner}/{repo}/releases/latest`
+- Get by tag: `GET /repos/{owner}/{repo}/releases/tags/{tag}`
+- Create: `POST /repos/{owner}/{repo}/releases`
+- Update: `PATCH /repos/{owner}/{repo}/releases/{release_id}`
+- Delete: `DELETE /repos/{owner}/{repo}/releases/{release_id}`
 
 ## References
 
 - GitHub API: [Milestones](https://docs.github.com/en/rest/issues/milestones)
 - GitHub API: [Workflows](https://docs.github.com/en/rest/actions/workflows)
 - GitHub API: [Releases](https://docs.github.com/en/rest/releases/releases)
+- ADR-003: [Domain Sub-Client Pattern](../adr/ADR-003-sub-client-api-pattern.md)

@@ -274,6 +274,44 @@ use reqwest;
 use crate::auth::{AuthenticationProvider, Installation, InstallationId};
 use crate::error::ApiError;
 
+// ============================================================================
+// Shared HTTP error mapping
+// ============================================================================
+
+/// Map an unsuccessful HTTP response to the canonical `ApiError` variant.
+///
+/// Called by sub-client modules (`issue`, `pull_request`) and
+/// `InstallationClient::fetch_all_pages`. The response body is consumed only
+/// for status codes that carry a useful message (422 and any unrecognised
+/// error), avoiding unnecessary I/O on 401 / 403 / 404 responses.
+pub(in crate::client) async fn map_http_error(
+    status: reqwest::StatusCode,
+    response: reqwest::Response,
+) -> ApiError {
+    match status.as_u16() {
+        401 => ApiError::AuthenticationFailed,
+        403 => ApiError::AuthorizationFailed,
+        404 => ApiError::NotFound,
+        422 => {
+            let message = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Validation failed".to_string());
+            ApiError::InvalidRequest { message }
+        }
+        _ => {
+            let message = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            ApiError::HttpError {
+                status: status.as_u16(),
+                message,
+            }
+        }
+    }
+}
+
 pub use app::App;
 pub use commit::{
     CommitDetails, CommitReference, Comparison, FileChange, FullCommit, GitSignature, Verification,
@@ -307,7 +345,10 @@ pub use retry::{
     calculate_rate_limit_delay, detect_secondary_rate_limit, parse_retry_after, RateLimitInfo,
     RetryPolicy,
 };
-pub use workflow::{TriggerWorkflowRequest, Workflow, WorkflowRun, WorkflowsClient};
+pub use workflow::{
+    TriggerWorkflowRequest, Workflow, WorkflowRun, WorkflowRunConclusion, WorkflowRunStatus,
+    WorkflowState, WorkflowsClient,
+};
 
 /// Configuration for GitHub API client behavior.
 ///

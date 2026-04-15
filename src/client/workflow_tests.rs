@@ -123,7 +123,7 @@ mod workflow_operations {
         assert_eq!(workflows.len(), 2);
         assert_eq!(workflows[0].id, 161335);
         assert_eq!(workflows[0].name, "CI");
-        assert_eq!(workflows[0].state, "active");
+        assert_eq!(workflows[0].state, WorkflowState::Active);
         assert_eq!(workflows[1].id, 269289);
         assert_eq!(workflows[1].name, "Deploy");
     }
@@ -179,7 +179,7 @@ mod workflow_operations {
         assert_eq!(workflow.id, 161335);
         assert_eq!(workflow.name, "CI");
         assert_eq!(workflow.path, ".github/workflows/ci.yml");
-        assert_eq!(workflow.state, "active");
+        assert_eq!(workflow.state, WorkflowState::Active);
     }
 
     /// Verify get_workflow returns NotFound for non-existent workflow.
@@ -381,8 +381,8 @@ mod workflow_run_operations {
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].id, 30433642);
         assert_eq!(runs[0].name, "CI");
-        assert_eq!(runs[0].status, "completed");
-        assert_eq!(runs[0].conclusion, Some("success".to_string()));
+        assert_eq!(runs[0].status, WorkflowRunStatus::Completed);
+        assert_eq!(runs[0].conclusion, Some(WorkflowRunConclusion::Success));
     }
 
     /// Verify get_workflow_run fetches a specific workflow run by ID.
@@ -441,8 +441,8 @@ mod workflow_run_operations {
         assert_eq!(run.name, "CI");
         assert_eq!(run.run_number, 562);
         assert_eq!(run.event, "push");
-        assert_eq!(run.status, "completed");
-        assert_eq!(run.conclusion, Some("success".to_string()));
+        assert_eq!(run.status, WorkflowRunStatus::Completed);
+        assert_eq!(run.conclusion, Some(WorkflowRunConclusion::Success));
     }
 
     /// Verify cancel_workflow_run cancels a running workflow.
@@ -550,7 +550,7 @@ mod serialization {
         assert_eq!(workflow.node_id, "MDg6V29ya2Zsb3cxNjEzMzU=");
         assert_eq!(workflow.name, "CI");
         assert_eq!(workflow.path, ".github/workflows/ci.yml");
-        assert_eq!(workflow.state, "active");
+        assert_eq!(workflow.state, WorkflowState::Active);
         assert_eq!(
             workflow.url,
             "https://api.github.com/repos/octocat/Hello-World/actions/workflows/161335"
@@ -595,8 +595,8 @@ mod serialization {
         assert_eq!(run.name, "Build");
         assert_eq!(run.run_number, 42);
         assert_eq!(run.event, "push");
-        assert_eq!(run.status, "completed");
-        assert_eq!(run.conclusion, Some("success".to_string()));
+        assert_eq!(run.status, WorkflowRunStatus::Completed);
+        assert_eq!(run.conclusion, Some(WorkflowRunConclusion::Success));
         assert_eq!(run.workflow_id, 159038);
         assert_eq!(run.head_branch, "master");
         assert_eq!(run.head_sha, "acb5820ced9479c074f688cc328bf03f341a511d");

@@ -545,35 +545,6 @@ struct CreateReactionRequest {
 }
 
 // ============================================================================
-// Shared error-mapping helper
-// ============================================================================
-
-async fn map_error(status: reqwest::StatusCode, response: reqwest::Response) -> ApiError {
-    match status.as_u16() {
-        401 => ApiError::AuthenticationFailed,
-        403 => ApiError::AuthorizationFailed,
-        404 => ApiError::NotFound,
-        422 => {
-            let message = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Validation failed".to_string());
-            ApiError::InvalidRequest { message }
-        }
-        _ => {
-            let message = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            ApiError::HttpError {
-                status: status.as_u16(),
-                message,
-            }
-        }
-    }
-}
-
-// ============================================================================
 // IssuesClient
 // ============================================================================
 
@@ -624,7 +595,7 @@ impl IssuesClient {
         let response = self.client.get(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
 
         let pagination = response
@@ -651,7 +622,7 @@ impl IssuesClient {
         let response = self.client.get(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -670,7 +641,7 @@ impl IssuesClient {
         let response = self.client.post(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -690,7 +661,7 @@ impl IssuesClient {
         let response = self.client.patch(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -746,7 +717,7 @@ impl IssuesClient {
         let response = self.client.get(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -763,7 +734,7 @@ impl IssuesClient {
         let response = self.client.post(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -780,7 +751,7 @@ impl IssuesClient {
         let response = self.client.patch(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -796,7 +767,7 @@ impl IssuesClient {
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         Ok(())
     }
@@ -829,7 +800,7 @@ impl IssuesClient {
         let response = self.client.post(&path, &body).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -857,7 +828,7 @@ impl IssuesClient {
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -878,7 +849,7 @@ impl IssuesClient {
         let response = self.client.put(&path, &body).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -918,7 +889,7 @@ impl IssuesClient {
         let response = self.client.post(&path, &body).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -938,7 +909,7 @@ impl IssuesClient {
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         Ok(())
     }
@@ -973,7 +944,7 @@ impl IssuesClient {
         let response = self.client.post(&path, &body).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -993,7 +964,7 @@ impl IssuesClient {
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         Ok(())
     }
@@ -1029,7 +1000,7 @@ impl IssuesClient {
         let response = self.client.post(&path, &body).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1053,7 +1024,7 @@ impl IssuesClient {
         let response = self.client.delete_with_body(&path, &body).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1081,7 +1052,7 @@ impl IssuesClient {
         let response = self.client.put(&path, &body).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         Ok(())
     }
@@ -1095,7 +1066,7 @@ impl IssuesClient {
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         Ok(())
     }
@@ -1189,7 +1160,7 @@ impl LabelsClient {
         let response = self.client.get(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1209,7 +1180,7 @@ impl LabelsClient {
         let response = self.client.post(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1237,7 +1208,7 @@ impl LabelsClient {
         let response = self.client.patch(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1259,7 +1230,7 @@ impl LabelsClient {
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         Ok(())
     }
@@ -1342,7 +1313,7 @@ impl MilestonesClient {
         let response = self.client.get(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1362,7 +1333,7 @@ impl MilestonesClient {
         let response = self.client.post(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1383,7 +1354,7 @@ impl MilestonesClient {
         let response = self.client.patch(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1405,7 +1376,7 @@ impl MilestonesClient {
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         Ok(())
     }

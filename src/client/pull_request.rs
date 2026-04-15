@@ -322,35 +322,6 @@ pub struct UpdatePullRequestCommentRequest {
 }
 
 // ============================================================================
-// Shared error-mapping helper
-// ============================================================================
-
-async fn map_error(status: reqwest::StatusCode, response: reqwest::Response) -> ApiError {
-    match status.as_u16() {
-        401 => ApiError::AuthenticationFailed,
-        403 => ApiError::AuthorizationFailed,
-        404 => ApiError::NotFound,
-        422 => {
-            let message = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Validation failed".to_string());
-            ApiError::InvalidRequest { message }
-        }
-        _ => {
-            let message = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            ApiError::HttpError {
-                status: status.as_u16(),
-                message,
-            }
-        }
-    }
-}
-
-// ============================================================================
 // PullRequestsClient
 // ============================================================================
 
@@ -892,7 +863,7 @@ impl PullRequestsClient {
         let response = self.client.post(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -911,7 +882,7 @@ impl PullRequestsClient {
         let response = self.client.patch(&path, &request).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -929,7 +900,7 @@ impl PullRequestsClient {
         let response = self.client.delete(&path).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         Ok(())
     }
@@ -955,7 +926,7 @@ impl PullRequestsClient {
 
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -978,7 +949,7 @@ impl PullRequestsClient {
         let response = self.client.put(&path, &body).await?;
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
         response.json().await.map_err(ApiError::from)
     }
@@ -1001,7 +972,7 @@ impl PullRequestsClient {
         repo: &str,
         pull_number: u64,
         name: &str,
-    ) -> Result<(), ApiError> {
+    ) -> Result<Vec<Label>, ApiError> {
         // PRs use the same label endpoint as issues
         let path = format!(
             "/repos/{}/{}/issues/{}/labels/{}",
@@ -1014,9 +985,9 @@ impl PullRequestsClient {
 
         let status = response.status();
         if !status.is_success() {
-            return Err(map_error(status, response).await);
+            return Err(super::map_http_error(status, response).await);
         }
-        Ok(())
+        response.json().await.map_err(ApiError::from)
     }
 }
 

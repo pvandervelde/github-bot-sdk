@@ -205,12 +205,15 @@ pub struct UpdateMilestoneRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workflow {
     pub id: u64,
+    pub node_id: String,
     pub name: String,
     pub path: String,
     pub state: WorkflowState,
-    pub html_url: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub url: String,
+    pub html_url: String,
+    pub badge_url: String,
 }
 ```
 
@@ -218,10 +221,13 @@ pub struct Workflow {
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum WorkflowState {
     Active,
-    Disabled,
+    DisabledManually,
+    DisabledInactivity,
+    DisabledFork,
+    Deleted,
 }
 ```
 
@@ -231,13 +237,19 @@ pub enum WorkflowState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowRun {
     pub id: u64,
+    pub node_id: String,
     pub name: String,
-    pub workflow_id: u64,
+    pub run_number: u64,
+    pub event: String,
     pub status: WorkflowRunStatus,
     pub conclusion: Option<WorkflowRunConclusion>,
-    pub html_url: String,
+    pub workflow_id: u64,
+    pub head_branch: String,
+    pub head_sha: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub url: String,
+    pub html_url: String,
 }
 ```
 
@@ -250,6 +262,9 @@ pub enum WorkflowRunStatus {
     Queued,
     InProgress,
     Completed,
+    Waiting,
+    Requested,
+    Pending,
 }
 ```
 
@@ -263,6 +278,10 @@ pub enum WorkflowRunConclusion {
     Failure,
     Cancelled,
     Skipped,
+    TimedOut,
+    ActionRequired,
+    Stale,
+    Neutral,
 }
 ```
 
@@ -429,16 +448,18 @@ pub struct TriggerWorkflowRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Release {
     pub id: u64,
+    pub node_id: String,
     pub tag_name: String,
+    pub target_commitish: String,
     pub name: Option<String>,
     pub body: Option<String>,
     pub draft: bool,
     pub prerelease: bool,
-    pub html_url: String,
-    pub tarball_url: String,
-    pub zipball_url: String,
+    pub author: IssueUser,
     pub created_at: DateTime<Utc>,
-    pub published_at: DateTime<Utc>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub url: String,
+    pub html_url: String,
     pub assets: Vec<ReleaseAsset>,
 }
 ```
@@ -643,6 +664,8 @@ pub struct UpdateReleaseRequest {
 - Get latest: `GET /repos/{owner}/{repo}/releases/latest`
 - Get by tag: `GET /repos/{owner}/{repo}/releases/tags/{tag}`
 - Create: `POST /repos/{owner}/{repo}/releases`
+- Update: `PATCH /repos/{owner}/{repo}/releases/{release_id}`
+- Delete: `DELETE /repos/{owner}/{repo}/releases/{release_id}`
 
 ## References
 

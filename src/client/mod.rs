@@ -345,7 +345,10 @@ pub use retry::{
     calculate_rate_limit_delay, detect_secondary_rate_limit, parse_retry_after, RateLimitInfo,
     RetryPolicy,
 };
-pub use workflow::{TriggerWorkflowRequest, Workflow, WorkflowRun, WorkflowsClient};
+pub use workflow::{
+    TriggerWorkflowRequest, Workflow, WorkflowRun, WorkflowRunConclusion, WorkflowRunStatus,
+    WorkflowState, WorkflowsClient,
+};
 
 /// Configuration for GitHub API client behavior.
 ///

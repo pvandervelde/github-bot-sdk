@@ -7,6 +7,22 @@ use serde::{Deserialize, Serialize};
 use crate::client::InstallationClient;
 use crate::error::ApiError;
 
+/// State of a GitHub Actions workflow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowState {
+    /// Workflow is active.
+    Active,
+    /// Workflow was disabled manually by a repository admin.
+    DisabledManually,
+    /// Workflow was disabled automatically due to inactivity.
+    DisabledInactivity,
+    /// Workflow is disabled because the repo is a fork.
+    DisabledFork,
+    /// Workflow has been deleted.
+    Deleted,
+}
+
 /// GitHub Actions workflow.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workflow {
@@ -23,7 +39,7 @@ pub struct Workflow {
     pub path: String,
 
     /// Workflow state
-    pub state: String, // "active", "disabled_manually", "disabled_inactivity"
+    pub state: WorkflowState,
 
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
@@ -39,6 +55,46 @@ pub struct Workflow {
 
     /// Workflow badge URL
     pub badge_url: String,
+}
+
+/// Status of a GitHub Actions workflow run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowRunStatus {
+    /// Run is queued and waiting to start.
+    Queued,
+    /// Run is currently executing.
+    InProgress,
+    /// Run has finished.
+    Completed,
+    /// Run is waiting on a required check or deployment protection rule.
+    Waiting,
+    /// Run has been requested.
+    Requested,
+    /// Run is pending.
+    Pending,
+}
+
+/// Conclusion of a completed GitHub Actions workflow run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowRunConclusion {
+    /// Run completed successfully.
+    Success,
+    /// Run failed.
+    Failure,
+    /// Run was cancelled.
+    Cancelled,
+    /// Run was skipped.
+    Skipped,
+    /// Run timed out.
+    TimedOut,
+    /// Run requires manual action.
+    ActionRequired,
+    /// Run result is stale.
+    Stale,
+    /// Run completed with a neutral result.
+    Neutral,
 }
 
 /// GitHub Actions workflow run.
@@ -60,10 +116,10 @@ pub struct WorkflowRun {
     pub event: String,
 
     /// Workflow run status
-    pub status: String, // "queued", "in_progress", "completed"
+    pub status: WorkflowRunStatus,
 
     /// Workflow run conclusion (if completed)
-    pub conclusion: Option<String>, // "success", "failure", "cancelled", "skipped", etc.
+    pub conclusion: Option<WorkflowRunConclusion>,
 
     /// Workflow ID
     pub workflow_id: u64,

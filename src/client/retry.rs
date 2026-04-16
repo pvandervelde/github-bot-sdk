@@ -188,7 +188,7 @@ impl RetryPolicy {
 
         // Add jitter if enabled (±25% randomization)
         if self.use_jitter {
-            use rand::Rng;
+            use rand::RngExt;
             let mut rng = rand::rng();
             let jitter_factor = rng.random_range(0.75..=1.25);
             delay = Duration::from_millis((delay.as_millis() as f64 * jitter_factor) as u64);

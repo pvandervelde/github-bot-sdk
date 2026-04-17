@@ -202,17 +202,9 @@ impl InstallationClient {
                     // Check for other client errors (4xx except 429 and 403 which are handled above)
                     // These are non-retryable - map to appropriate error types
                     if (400..500).contains(&status) {
-                        let body = response.text().await.unwrap_or_default();
-                        return Err(match status {
-                            401 => ApiError::AuthenticationFailed,
-                            403 => ApiError::AuthorizationFailed, // Permission denied (not rate limit)
-                            404 => ApiError::NotFound,
-                            422 => ApiError::InvalidRequest { message: body },
-                            _ => ApiError::HttpError {
-                                status,
-                                message: body,
-                            },
-                        });
+                        let status_code = reqwest::StatusCode::from_u16(status)
+                            .unwrap_or(reqwest::StatusCode::BAD_REQUEST);
+                        return Err(super::map_http_error(status_code, response).await);
                     }
 
                     // Success (2xx or 3xx)

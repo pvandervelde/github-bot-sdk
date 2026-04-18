@@ -25,8 +25,8 @@ reqwest = { version = "0.13", features = ["json"] }
 
 # JWT and crypto
 jsonwebtoken = { version = "10.3", features = ["rust_crypto"] }
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
 rsa = "0.9"
 subtle = "2.6"
 hex = "0.4"

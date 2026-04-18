@@ -63,7 +63,7 @@ async fn test_validate_with_valid_signature() {
     // Compute expected signature manually for verification
     // This is the HMAC-SHA256 of the payload with the secret
     // Expected: sha256=<hex_encoded_hmac>
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -94,7 +94,7 @@ async fn test_validate_with_github_example_payload() {
     let payload = br#"{"zen":"Design for failure.","hook_id":1}"#;
 
     // Compute expected signature
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -129,7 +129,7 @@ async fn test_validate_with_tampered_payload() {
     let tampered_payload = br#"{"action":"closed","number":1}"#; // Changed action
 
     // Create signature for original payload
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -156,7 +156,7 @@ async fn test_validate_with_wrong_secret() {
 
     // Create signature with correct secret
     let payload = br#"{"action":"opened"}"#;
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -189,7 +189,7 @@ async fn test_validate_with_modified_signature() {
     let payload = br#"{"action":"opened"}"#;
 
     // Create valid signature
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -314,7 +314,7 @@ async fn test_validate_with_empty_payload() {
     let payload = b"";
 
     // Compute signature for empty payload
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -344,7 +344,7 @@ async fn test_validate_with_large_payload() {
     let large_payload = vec![b'a'; 1024 * 1024];
 
     // Compute signature
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -383,7 +383,7 @@ async fn test_validate_with_unicode_in_payload() {
     let payload = r#"{"message":"Hello 世界 🌍"}"#.as_bytes();
 
     // Compute signature
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -412,7 +412,7 @@ async fn test_validate_with_special_characters_in_secret() {
     let payload = br#"{"action":"opened"}"#;
 
     // Compute signature
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
@@ -455,7 +455,7 @@ async fn test_uses_constant_time_comparison() {
     let payload = br#"{"action":"opened"}"#;
 
     // Create valid signature
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 

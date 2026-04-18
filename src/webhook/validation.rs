@@ -175,7 +175,7 @@ impl SignatureValidator {
     ///
     /// The computed HMAC signature bytes
     fn compute_hmac(&self, payload: &[u8], secret: &str) -> Result<Vec<u8>, ValidationError> {
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, KeyInit, Mac};
         use sha2::Sha256;
 
         type HmacSha256 = Hmac<Sha256>;

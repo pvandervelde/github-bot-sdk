@@ -59,6 +59,8 @@ postprocessors = [
 conventional_commits = true
 # filter out the commits that are not conventional
 filter_unconventional = true
+# include merge commits (GitHub PR merge commits carry the feat/fix prefix)
+use_merge_commit = true
 # process each line of a commit as an individual commit
 split_commits = false
 # regex for preprocessing the commit messages

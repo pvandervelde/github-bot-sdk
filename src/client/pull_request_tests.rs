@@ -129,7 +129,6 @@ mod construction {
             body: None,
             state: None,
             base: None,
-            milestone: None,
         };
 
         assert_eq!(request.title, Some("Updated title".to_string()));
@@ -449,6 +448,259 @@ mod pull_request_operations {
 
         assert_eq!(pr.number, 42);
         assert_eq!(pr.title, "New Feature");
+    }
+}
+
+mod milestone_operations {
+    use super::*;
+
+    fn pr_json(milestone_number: Option<u64>) -> serde_json::Value {
+        serde_json::json!({
+            "id": 1,
+            "node_id": "PR_1",
+            "number": 42,
+            "title": "Test PR",
+            "body": null,
+            "state": "open",
+            "user": {
+                "login": "testuser",
+                "id": 123,
+                "node_id": "U_123",
+                "type": "User"
+            },
+            "head": {
+                "ref": "feature-branch",
+                "sha": "abc123",
+                "repo": {
+                    "id": 456,
+                    "name": "repo",
+                    "full_name": "owner/repo"
+                }
+            },
+            "base": {
+                "ref": "main",
+                "sha": "def456",
+                "repo": {
+                    "id": 456,
+                    "name": "repo",
+                    "full_name": "owner/repo"
+                }
+            },
+            "draft": false,
+            "merged": false,
+            "mergeable": null,
+            "merge_commit_sha": null,
+            "assignees": [],
+            "requested_reviewers": [],
+            "labels": [],
+            "milestone": milestone_number.map(|n| serde_json::json!({
+                "id": n,
+                "node_id": "MI_1",
+                "number": n,
+                "title": "v1.0",
+                "description": null,
+                "state": "open",
+                "open_issues": 0,
+                "closed_issues": 0,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "due_on": null,
+                "closed_at": null,
+                "html_url": "https://github.com/owner/repo/milestone/1",
+                "url": "https://api.github.com/repos/owner/repo/milestones/1",
+                "labels_url": "https://api.github.com/repos/owner/repo/milestones/1/labels",
+                "creator": {
+                    "login": "testuser",
+                    "id": 123,
+                    "node_id": "U_123",
+                    "type": "User"
+                }
+            })),
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "closed_at": null,
+            "merged_at": null,
+            "html_url": "https://github.com/owner/repo/pull/42"
+        })
+    }
+
+    fn issue_json(milestone_number: u64) -> serde_json::Value {
+        serde_json::json!({
+            "id": 1,
+            "node_id": "I_1",
+            "number": 42,
+            "title": "Test PR",
+            "body": null,
+            "state": "open",
+            "locked": false,
+            "user": {
+                "login": "testuser",
+                "id": 123,
+                "node_id": "U_123",
+                "type": "User"
+            },
+            "assignees": [],
+            "labels": [],
+            "milestone": {
+                "id": milestone_number,
+                "node_id": "MI_1",
+                "number": milestone_number,
+                "title": "v1.0",
+                "description": null,
+                "state": "open",
+                "open_issues": 0,
+                "closed_issues": 0,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "due_on": null,
+                "closed_at": null,
+                "html_url": "https://github.com/owner/repo/milestone/1",
+                "url": "https://api.github.com/repos/owner/repo/milestones/1",
+                "labels_url": "https://api.github.com/repos/owner/repo/milestones/1/labels",
+                "creator": {
+                    "login": "testuser",
+                    "id": 123,
+                    "node_id": "U_123",
+                    "type": "User"
+                }
+            },
+            "comments": 0,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "closed_at": null,
+            "html_url": "https://github.com/owner/repo/issues/42"
+        })
+    }
+
+    /// Verify set_milestone delegates to the Issues API, not the Pulls API.
+    ///
+    /// GitHub's Pulls API silently ignores the milestone field; the Issues API
+    /// (PATCH /repos/{owner}/{repo}/issues/{number}) is the correct endpoint.
+    /// After setting the milestone via the Issues API the PR is re-fetched.
+    #[tokio::test]
+    async fn test_set_milestone_uses_issues_api() {
+        let mock_server = MockServer::start().await;
+
+        // The Issues API PATCH must be called to set the milestone.
+        Mock::given(method("PATCH"))
+            .and(path("/repos/owner/repo/issues/42"))
+            .and(header("Authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(issue_json(7)))
+            .mount(&mock_server)
+            .await;
+
+        // After the Issues API call the PR is re-fetched.
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/pulls/42"))
+            .and(header("Authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(pr_json(Some(7))))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let pr = client
+            .pull_requests()
+            .set_milestone("owner", "repo", 42, Some(7))
+            .await
+            .unwrap();
+
+        assert_eq!(pr.number, 42);
+        assert!(pr.milestone.is_some());
+        assert_eq!(pr.milestone.unwrap().number, 7);
+    }
+
+    /// Verify set_milestone with None clears the milestone via the Issues API.
+    #[tokio::test]
+    async fn test_set_milestone_clear_uses_issues_api() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("PATCH"))
+            .and(path("/repos/owner/repo/issues/42"))
+            .and(header("Authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 1,
+                "node_id": "I_1",
+                "number": 42,
+                "title": "Test PR",
+                "body": null,
+                "state": "open",
+                "locked": false,
+                "user": {"login": "testuser", "id": 123, "node_id": "U_123", "type": "User"},
+                "assignees": [],
+                "labels": [],
+                "milestone": null,
+                "comments": 0,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "closed_at": null,
+                "html_url": "https://github.com/owner/repo/issues/42"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/repos/owner/repo/pulls/42"))
+            .and(header("Authorization", "Bearer test-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(pr_json(None)))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let pr = client
+            .pull_requests()
+            .set_milestone("owner", "repo", 42, None)
+            .await
+            .unwrap();
+
+        assert_eq!(pr.number, 42);
+        assert!(pr.milestone.is_none());
+    }
+
+    /// Verify set_milestone propagates errors from the Issues API.
+    #[tokio::test]
+    async fn test_set_milestone_propagates_issues_api_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("PATCH"))
+            .and(path("/repos/owner/repo/issues/42"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&mock_server)
+            .await;
+
+        let auth = MockAuthProvider::new_with_token("test-token");
+        let github_client = GitHubClient::builder(auth)
+            .config(ClientConfig::default().with_github_api_url(mock_server.uri()))
+            .build()
+            .unwrap();
+        let client = github_client
+            .installation_by_id(InstallationId::new(12345))
+            .await
+            .unwrap();
+
+        let result = client
+            .pull_requests()
+            .set_milestone("owner", "repo", 42, Some(7))
+            .await;
+
+        assert!(matches!(result, Err(ApiError::NotFound)));
     }
 }
 

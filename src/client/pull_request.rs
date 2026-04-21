@@ -222,6 +222,10 @@ pub struct CreatePullRequestRequest {
 }
 
 /// Request to update an existing pull request.
+///
+/// Note: milestone assignment is not supported here — the GitHub Pulls API
+/// silently ignores the `milestone` field. Use `PullRequestsClient::set_milestone`
+/// which delegates to the Issues API endpoint that actually applies the milestone.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct UpdatePullRequestRequest {
     /// Pull request title
@@ -239,10 +243,6 @@ pub struct UpdatePullRequestRequest {
     /// Base branch
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base: Option<String>,
-
-    /// Milestone number (None to clear milestone)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub milestone: Option<u64>,
 }
 
 /// Request to merge a pull request.
@@ -605,7 +605,12 @@ impl PullRequestsClient {
 
     /// Set the milestone on a pull request.
     ///
-    /// See docs/spec/interfaces/pull-request-operations.md
+    /// The GitHub Pulls API silently ignores the milestone field, so this method
+    /// delegates to the Issues API (PATCH /repos/{owner}/{repo}/issues/{number})
+    /// which correctly applies the milestone, then re-fetches the PR to return
+    /// the updated state.
+    ///
+    /// See docs/specs/interfaces/pull-request-operations.md
     pub async fn set_milestone(
         &self,
         owner: &str,
@@ -613,11 +618,11 @@ impl PullRequestsClient {
         pull_number: u64,
         milestone_number: Option<u64>,
     ) -> Result<PullRequest, ApiError> {
-        let request = UpdatePullRequestRequest {
-            milestone: milestone_number,
-            ..Default::default()
-        };
-        self.update(owner, repo, pull_number, request).await
+        self.client
+            .issues()
+            .set_milestone(owner, repo, pull_number, milestone_number)
+            .await?;
+        self.get(owner, repo, pull_number).await
     }
 
     // ========================================================================

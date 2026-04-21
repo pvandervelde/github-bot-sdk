@@ -105,7 +105,7 @@ query GetIssueLinkedProjects($owner: String!, $repo: String!, $number: Int!, $cu
           databaseId
           number
           title
-          description
+          shortDescription
           public
           url
           createdAt
@@ -141,7 +141,7 @@ fn map_project_node(node: &serde_json::Value) -> Option<ProjectV2> {
     let number = node.get("number")?.as_u64()?;
     let title = node.get("title")?.as_str()?.to_string();
     let description = node
-        .get("description")
+        .get("shortDescription")
         .and_then(|d| d.as_str())
         .map(|s| s.to_string());
     let public = node.get("public")?.as_bool()?;

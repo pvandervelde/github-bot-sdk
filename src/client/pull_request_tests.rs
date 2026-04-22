@@ -524,7 +524,7 @@ mod milestone_operations {
         })
     }
 
-    fn issue_json(milestone_number: u64) -> serde_json::Value {
+    fn issue_json(milestone_number: Option<u64>) -> serde_json::Value {
         serde_json::json!({
             "id": 1,
             "node_id": "I_1",
@@ -541,10 +541,10 @@ mod milestone_operations {
             },
             "assignees": [],
             "labels": [],
-            "milestone": {
-                "id": milestone_number,
+            "milestone": milestone_number.map(|n| serde_json::json!({
+                "id": n,
                 "node_id": "MI_1",
-                "number": milestone_number,
+                "number": n,
                 "title": "v1.0",
                 "description": null,
                 "state": "open",
@@ -563,7 +563,7 @@ mod milestone_operations {
                     "node_id": "U_123",
                     "type": "User"
                 }
-            },
+            })),
             "comments": 0,
             "created_at": "2024-01-01T00:00:00Z",
             "updated_at": "2024-01-01T00:00:00Z",
@@ -585,7 +585,7 @@ mod milestone_operations {
         Mock::given(method("PATCH"))
             .and(path("/repos/owner/repo/issues/42"))
             .and(header("Authorization", "Bearer test-token"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(issue_json(7)))
+            .respond_with(ResponseTemplate::new(200).set_body_json(issue_json(Some(7))))
             .mount(&mock_server)
             .await;
 
@@ -626,24 +626,7 @@ mod milestone_operations {
         Mock::given(method("PATCH"))
             .and(path("/repos/owner/repo/issues/42"))
             .and(header("Authorization", "Bearer test-token"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "id": 1,
-                "node_id": "I_1",
-                "number": 42,
-                "title": "Test PR",
-                "body": null,
-                "state": "open",
-                "locked": false,
-                "user": {"login": "testuser", "id": 123, "node_id": "U_123", "type": "User"},
-                "assignees": [],
-                "labels": [],
-                "milestone": null,
-                "comments": 0,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z",
-                "closed_at": null,
-                "html_url": "https://github.com/owner/repo/issues/42"
-            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(issue_json(None)))
             .mount(&mock_server)
             .await;
 

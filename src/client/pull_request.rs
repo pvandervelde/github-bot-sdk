@@ -610,6 +610,14 @@ impl PullRequestsClient {
     /// which correctly applies the milestone, then re-fetches the PR to return
     /// the updated state.
     ///
+    /// # Partial-failure note
+    ///
+    /// If the Issues API call succeeds but the subsequent `get()` call fails
+    /// (e.g. due to a transient network error), this method returns an error even
+    /// though the milestone **was** actually set on the PR. Callers should treat
+    /// an error response as "milestone state unknown" rather than "milestone not
+    /// set" and may wish to re-fetch the PR to confirm the current state.
+    ///
     /// See docs/specs/interfaces/pull-request-operations.md
     pub async fn set_milestone(
         &self,

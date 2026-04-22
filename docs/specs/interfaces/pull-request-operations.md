@@ -253,7 +253,10 @@ impl PullRequestsClient {
 }
 ```
 
-**Implementation**: Delegates to `update()` with the `milestone` field set.
+**Implementation**: Delegates to `IssuesClient::set_milestone` (which calls
+`PATCH /repos/{owner}/{repo}/issues/{number}`) because the GitHub Pulls API
+silently ignores the `milestone` field. After the Issues API call succeeds the
+PR is re-fetched with `get()` to return its updated state.
 
 ## Review Operations
 
@@ -537,6 +540,10 @@ pub struct UpdatePullRequestRequest {
     pub state: Option<PullRequestState>,
 }
 ```
+
+> **Note**: `milestone` is intentionally absent. The GitHub Pulls API silently
+> ignores the `milestone` field. Use `PullRequestsClient::set_milestone` which
+> routes through the Issues API to correctly apply the milestone.
 
 ### MergePullRequestRequest
 

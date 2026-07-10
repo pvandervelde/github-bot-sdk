@@ -994,13 +994,12 @@ Changelog is automatically generated from conventional commits using [git-cliff]
 
 ### Release Process
 
-Releases are automated using [release-plz](https://github.com/MarcoIeni/release-plz):
+Releases are automated using [release-regent](https://github.com/pvandervelde/release_regent):
 
-1. Commits are analyzed for semantic versioning impact
-2. CHANGELOG.md is automatically updated
-3. Version is bumped in Cargo.toml
-4. GitHub release is created with notes
-5. Crate is published to crates.io
+1. Commits to `master` are analyzed for semantic versioning impact using conventional commits
+2. Release Regent opens a release PR with `CHANGELOG.md` updated and `Cargo.toml` version bumped
+3. When the release PR is merged, Release Regent creates the Git tag and GitHub release
+4. The `publish.yml` workflow fires on the published release and pushes the crate to crates.io
 
 ### Versioning Policy
 

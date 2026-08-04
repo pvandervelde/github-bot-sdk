@@ -48,7 +48,7 @@ async-trait = "0.1"
 bytes = "1.11"
 
 # Base64 encoding
-base64 = "0.22"
+base64 = "0.23"
 
 # URL handling
 url = "2.5"
